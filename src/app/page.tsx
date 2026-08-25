@@ -7,7 +7,6 @@ type MediaItem = {
   type: "image" | "video";
   url: string;
   name: string;
-  duration?: number;
 };
 
 type TextOverlay = {
@@ -23,9 +22,180 @@ type TextOverlay = {
 type Project = {
   media: MediaItem[];
   texts: TextOverlay[];
-  duration: number; // seconds
+  duration: number;
   backgroundColor: string;
+  themeName?: string;
 };
+
+type ThemeTemplate = {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  backgroundColor: string;
+  texts: Omit<TextOverlay, "id">[];
+};
+
+const THEMES: ThemeTemplate[] = [
+  {
+    id: "motivation",
+    name: "Motivation",
+    emoji: "🔥",
+    description: "Bold hooks & energy",
+    backgroundColor: "#0f0f0f",
+    texts: [
+      { text: "STOP SCROLLING", x: 50, y: 28, fontSize: 42, color: "#ffffff", fontWeight: "bold" },
+      { text: "This changes everything", x: 50, y: 48, fontSize: 28, color: "#fbbf24", fontWeight: "bold" },
+      { text: "Save this for later 👇", x: 50, y: 78, fontSize: 22, color: "#a3a3a3", fontWeight: "normal" },
+    ],
+  },
+  {
+    id: "fitness",
+    name: "Fitness",
+    emoji: "💪",
+    description: "Gym & transformation",
+    backgroundColor: "#111827",
+    texts: [
+      { text: "DAY 47", x: 50, y: 22, fontSize: 56, color: "#22c55e", fontWeight: "bold" },
+      { text: "No excuses.", x: 50, y: 42, fontSize: 36, color: "#ffffff", fontWeight: "bold" },
+      { text: "Just results.", x: 50, y: 58, fontSize: 32, color: "#86efac", fontWeight: "normal" },
+    ],
+  },
+  {
+    id: "business",
+    name: "Business",
+    emoji: "💼",
+    description: "Clean & professional",
+    backgroundColor: "#0c0a09",
+    texts: [
+      { text: "THE TRUTH ABOUT", x: 50, y: 30, fontSize: 26, color: "#a8a29e", fontWeight: "normal" },
+      { text: "Building Wealth", x: 50, y: 48, fontSize: 40, color: "#fafaf9", fontWeight: "bold" },
+      { text: "in 2026", x: 50, y: 65, fontSize: 28, color: "#f59e0b", fontWeight: "bold" },
+    ],
+  },
+  {
+    id: "travel",
+    name: "Travel",
+    emoji: "✈️",
+    description: "Wanderlust vibes",
+    backgroundColor: "#0c4a6e",
+    texts: [
+      { text: "Hidden gem ✨", x: 50, y: 25, fontSize: 28, color: "#7dd3fc", fontWeight: "normal" },
+      { text: "You need to visit", x: 50, y: 45, fontSize: 36, color: "#ffffff", fontWeight: "bold" },
+      { text: "this place", x: 50, y: 62, fontSize: 34, color: "#e0f2fe", fontWeight: "bold" },
+    ],
+  },
+  {
+    id: "food",
+    name: "Food",
+    emoji: "🍕",
+    description: "Tasty & colorful",
+    backgroundColor: "#7c2d12",
+    texts: [
+      { text: "Recipe in 30 seconds", x: 50, y: 28, fontSize: 26, color: "#fdba74", fontWeight: "normal" },
+      { text: "You will CRY", x: 50, y: 48, fontSize: 42, color: "#ffffff", fontWeight: "bold" },
+      { text: "when you try this", x: 50, y: 68, fontSize: 28, color: "#fed7aa", fontWeight: "normal" },
+    ],
+  },
+  {
+    id: "fashion",
+    name: "Fashion",
+    emoji: "👗",
+    description: "Style & aesthetic",
+    backgroundColor: "#1e1b4b",
+    texts: [
+      { text: "OUTFIT OF THE DAY", x: 50, y: 25, fontSize: 22, color: "#c4b5fd", fontWeight: "normal" },
+      { text: "Steal this look", x: 50, y: 45, fontSize: 38, color: "#ffffff", fontWeight: "bold" },
+      { text: "Link in bio 🔗", x: 50, y: 72, fontSize: 24, color: "#a78bfa", fontWeight: "normal" },
+    ],
+  },
+  {
+    id: "neon",
+    name: "Neon",
+    emoji: "💜",
+    description: "Cyber & vibrant",
+    backgroundColor: "#0f0518",
+    texts: [
+      { text: "NIGHT MODE", x: 50, y: 30, fontSize: 32, color: "#e879f9", fontWeight: "bold" },
+      { text: "ON", x: 50, y: 50, fontSize: 64, color: "#22d3ee", fontWeight: "bold" },
+      { text: "Stay until the end", x: 50, y: 75, fontSize: 22, color: "#c026d3", fontWeight: "normal" },
+    ],
+  },
+  {
+    id: "minimal",
+    name: "Minimal",
+    emoji: "✨",
+    description: "Clean & simple",
+    backgroundColor: "#fafafa",
+    texts: [
+      { text: "less is more", x: 50, y: 42, fontSize: 36, color: "#171717", fontWeight: "normal" },
+      { text: "—", x: 50, y: 55, fontSize: 28, color: "#a3a3a3", fontWeight: "normal" },
+      { text: "keep it simple", x: 50, y: 68, fontSize: 22, color: "#525252", fontWeight: "normal" },
+    ],
+  },
+];
+
+function generateAITemplate(prompt: string): ThemeTemplate {
+  const lower = prompt.toLowerCase();
+
+  if (lower.includes("gym") || lower.includes("fitness") || lower.includes("workout") || lower.includes("muscle")) {
+    return {
+      id: "ai-fitness",
+      name: "AI Fitness",
+      emoji: "🤖",
+      description: "Generated from your prompt",
+      backgroundColor: "#111827",
+      texts: [
+        { text: "NO DAYS OFF", x: 50, y: 30, fontSize: 40, color: "#22c55e", fontWeight: "bold" },
+        { text: prompt.slice(0, 40) || "Train harder", x: 50, y: 52, fontSize: 26, color: "#ffffff", fontWeight: "bold" },
+        { text: "Follow for more tips", x: 50, y: 75, fontSize: 20, color: "#86efac", fontWeight: "normal" },
+      ],
+    };
+  }
+
+  if (lower.includes("money") || lower.includes("business") || lower.includes("rich") || lower.includes("hustle")) {
+    return {
+      id: "ai-business",
+      name: "AI Business",
+      emoji: "🤖",
+      description: "Generated from your prompt",
+      backgroundColor: "#0c0a09",
+      texts: [
+        { text: "THE REAL SECRET", x: 50, y: 28, fontSize: 24, color: "#f59e0b", fontWeight: "bold" },
+        { text: prompt.slice(0, 35) || "Make money online", x: 50, y: 48, fontSize: 32, color: "#fafaf9", fontWeight: "bold" },
+        { text: "Watch till the end", x: 50, y: 72, fontSize: 20, color: "#a8a29e", fontWeight: "normal" },
+      ],
+    };
+  }
+
+  if (lower.includes("travel") || lower.includes("trip") || lower.includes("vacation") || lower.includes("beach")) {
+    return {
+      id: "ai-travel",
+      name: "AI Travel",
+      emoji: "🤖",
+      description: "Generated from your prompt",
+      backgroundColor: "#0c4a6e",
+      texts: [
+        { text: "You need to see this", x: 50, y: 28, fontSize: 26, color: "#7dd3fc", fontWeight: "normal" },
+        { text: prompt.slice(0, 30) || "Dream destination", x: 50, y: 50, fontSize: 34, color: "#ffffff", fontWeight: "bold" },
+        { text: "Save for later ✈️", x: 50, y: 75, fontSize: 22, color: "#bae6fd", fontWeight: "normal" },
+      ],
+    };
+  }
+
+  return {
+    id: "ai-custom",
+    name: "AI Custom",
+    emoji: "🤖",
+    description: "Generated from your prompt",
+    backgroundColor: "#0f0f0f",
+    texts: [
+      { text: "LISTEN UP", x: 50, y: 26, fontSize: 28, color: "#fbbf24", fontWeight: "bold" },
+      { text: prompt.slice(0, 40) || "Your message here", x: 50, y: 48, fontSize: 34, color: "#ffffff", fontWeight: "bold" },
+      { text: "Comment if you agree", x: 50, y: 75, fontSize: 20, color: "#a3a3a3", fontWeight: "normal" },
+    ],
+  };
+}
 
 const DEFAULT_PROJECT: Project = {
   media: [],
@@ -37,14 +207,34 @@ const DEFAULT_PROJECT: Project = {
 export default function Home() {
   const [project, setProject] = useState<Project>(DEFAULT_PROJECT);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
+  const [aiPrompt, setAiPrompt] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"themes" | "media" | "text">("themes");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const animationRef = useRef<number | null>(null);
 
-  // Add media from file upload
+  const applyTheme = (theme: ThemeTemplate) => {
+    const texts: TextOverlay[] = theme.texts.map((t) => ({
+      ...t,
+      id: crypto.randomUUID(),
+    }));
+    setProject((prev) => ({
+      ...prev,
+      backgroundColor: theme.backgroundColor,
+      texts,
+      themeName: theme.name,
+    }));
+    setSelectedTextId(texts[0]?.id || null);
+    setActiveTab("text");
+  };
+
+  const handleAIGenerate = () => {
+    if (!aiPrompt.trim()) return;
+    const generated = generateAITemplate(aiPrompt.trim());
+    applyTheme(generated);
+    setAiPrompt("");
+  };
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -64,18 +254,17 @@ export default function Home() {
       }));
     });
 
-    // reset input
     if (fileInputRef.current) fileInputRef.current.value = "";
+    setActiveTab("media");
   }, []);
 
-  // Add text overlay
   const addText = () => {
     const newText: TextOverlay = {
       id: crypto.randomUUID(),
-      text: "Your text here",
+      text: "New text",
       x: 50,
       y: 50,
-      fontSize: 48,
+      fontSize: 36,
       color: "#ffffff",
       fontWeight: "bold",
     };
@@ -86,7 +275,6 @@ export default function Home() {
     setSelectedTextId(newText.id);
   };
 
-  // Update selected text
   const updateText = (id: string, updates: Partial<TextOverlay>) => {
     setProject((prev) => ({
       ...prev,
@@ -94,7 +282,6 @@ export default function Home() {
     }));
   };
 
-  // Remove media or text
   const removeMedia = (id: string) => {
     setProject((prev) => ({
       ...prev,
@@ -110,26 +297,22 @@ export default function Home() {
     if (selectedTextId === id) setSelectedTextId(null);
   };
 
-  // Simple canvas renderer for preview
   const drawFrame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear
     ctx.fillStyle = project.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw first media item (MVP: single clip for now)
     if (project.media.length > 0) {
       const media = project.media[0];
-      // For images we can draw immediately; videos need more work
       if (media.type === "image") {
         const img = new Image();
+        img.crossOrigin = "anonymous";
         img.src = media.url;
         img.onload = () => {
-          // Cover the 9:16 canvas
           const scale = Math.max(canvas.width / img.width, canvas.height / img.height);
           const w = img.width * scale;
           const h = img.height * scale;
@@ -137,54 +320,63 @@ export default function Home() {
           const y = (canvas.height - h) / 2;
           ctx.drawImage(img, x, y, w, h);
 
-          // Draw texts on top
           project.texts.forEach((t) => {
-            ctx.font = `${t.fontWeight} ${t.fontSize}px system-ui, sans-serif`;
+            ctx.font = `${t.fontWeight} ${t.fontSize}px system-ui, -apple-system, sans-serif`;
             ctx.fillStyle = t.color;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            // Simple drop shadow
-            ctx.shadowColor = "rgba(0,0,0,0.7)";
-            ctx.shadowBlur = 8;
+            ctx.shadowColor = "rgba(0,0,0,0.75)";
+            ctx.shadowBlur = 10;
             ctx.shadowOffsetX = 2;
             ctx.shadowOffsetY = 2;
             ctx.fillText(t.text, (t.x / 100) * canvas.width, (t.y / 100) * canvas.height);
             ctx.shadowColor = "transparent";
           });
         };
+        return;
       }
-    } else {
-      // Placeholder
-      ctx.fillStyle = "#27272a";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#71717a";
-      ctx.font = "24px system-ui";
+    }
+
+    project.texts.forEach((t) => {
+      ctx.font = `${t.fontWeight} ${t.fontSize}px system-ui, -apple-system, sans-serif`;
+      ctx.fillStyle = t.color;
       ctx.textAlign = "center";
-      ctx.fillText("Upload media to start", canvas.width / 2, canvas.height / 2);
+      ctx.textBaseline = "middle";
+      ctx.shadowColor = "rgba(0,0,0,0.75)";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+      ctx.fillText(t.text, (t.x / 100) * canvas.width, (t.y / 100) * canvas.height);
+      ctx.shadowColor = "transparent";
+    });
+
+    if (project.texts.length === 0 && project.media.length === 0) {
+      ctx.fillStyle = "#52525b";
+      ctx.font = "20px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("Choose a theme or upload media", canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = "16px system-ui";
+      ctx.fillStyle = "#71717a";
+      ctx.fillText("to start creating", canvas.width / 2, canvas.height / 2 + 20);
     }
   }, [project]);
 
   useEffect(() => {
     drawFrame();
-  }, [drawFrame, project]);
+  }, [drawFrame]);
 
-  // Export as image sequence / simple download for now
-  // Full MP4 export will use MediaRecorder or FFmpeg.wasm in next iteration
   const handleExport = async () => {
     setExporting(true);
     try {
       const canvas = canvasRef.current;
       if (!canvas) return;
-
-      // For MVP: export current frame as high-quality PNG (or we can expand to video)
+      drawFrame();
+      await new Promise((r) => setTimeout(r, 120));
       const dataUrl = canvas.toDataURL("image/png");
       const link = document.createElement("a");
-      link.download = `reel-${Date.now()}.png`;
+      link.download = `reel-${project.themeName || "custom"}-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
-
-      // TODO: Real video export coming next
-      alert("Frame exported! Full MP4 video export will be added in the next update.");
     } finally {
       setExporting(false);
     }
@@ -193,269 +385,309 @@ export default function Home() {
   const selectedText = project.texts.find((t) => t.id === selectedTextId);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/80 backdrop-blur">
+    <div className="flex flex-col h-screen overflow-hidden bg-zinc-950 text-zinc-100">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center font-bold text-sm">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center font-bold text-sm shadow-lg shadow-violet-900/40">
             RF
           </div>
           <div>
-            <h1 className="font-semibold text-lg leading-tight">ReelForge</h1>
-            <p className="text-xs text-zinc-400">Create & share short videos</p>
+            <h1 className="font-semibold text-lg leading-tight tracking-tight">ReelForge</h1>
+            <p className="text-[11px] text-zinc-400">AI templates • Create & share</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             onClick={handleExport}
-            disabled={exporting || project.media.length === 0}
-            className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition"
+            disabled={exporting}
+            className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-sm font-medium transition shadow-lg shadow-violet-900/30"
           >
-            {exporting ? "Exporting\u2026" : "Export"}
-          </button>
-          <button
-            className="px-4 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-sm font-medium transition"
-            title="Coming soon \u2014 connect your accounts"
-          >
-            Share
+            {exporting ? "Exporting…" : "Export PNG"}
           </button>
         </div>
       </header>
 
-      {/* Main workspace */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel \u2014 Media */}
-        <aside className="w-64 border-r border-zinc-800 bg-zinc-900 flex flex-col">
-          <div className="p-3 border-b border-zinc-800">
-            <h2 className="text-sm font-medium text-zinc-300 mb-2">Media</h2>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full py-2 rounded-lg border border-dashed border-zinc-600 hover:border-violet-500 hover:bg-zinc-800/50 text-sm transition"
-            >
-              + Upload image or video
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              className="hidden"
-              onChange={handleFileUpload}
-            />
+        <aside className="w-72 border-r border-zinc-800 bg-zinc-900 flex flex-col shrink-0">
+          <div className="flex border-b border-zinc-800">
+            {(["themes", "media", "text"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-2.5 text-xs font-medium capitalize transition ${
+                  activeTab === tab
+                    ? "text-violet-400 border-b-2 border-violet-500 bg-violet-500/5"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tab === "themes" ? "AI Themes" : tab}
+              </button>
+            ))}
           </div>
 
-          <div className="flex-1 overflow-y-auto panel-scroll p-3 space-y-2">
-            {project.media.length === 0 && (
-              <p className="text-xs text-zinc-500 text-center mt-8">
-                No media yet.<br />Upload to begin.
-              </p>
-            )}
-            {project.media.map((m) => (
-              <div
-                key={m.id}
-                className="group relative rounded-lg overflow-hidden bg-zinc-800 border border-zinc-700"
-              >
-                {m.type === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.url} alt={m.name} className="w-full h-24 object-cover" />
-                ) : (
-                  <div className="w-full h-24 flex items-center justify-center text-zinc-500 text-xs">
-                    Video
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+          <div className="flex-1 overflow-y-auto panel-scroll p-3">
+            {activeTab === "themes" && (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-3 space-y-2">
+                  <p className="text-xs font-medium text-violet-300 flex items-center gap-1.5">
+                    <span>✨</span> AI Generate Template
+                  </p>
+                  <input
+                    type="text"
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAIGenerate()}
+                    placeholder="e.g. gym motivation, travel tip..."
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 placeholder:text-zinc-600"
+                  />
                   <button
-                    onClick={() => removeMedia(m.id)}
-                    className="px-2 py-1 bg-red-600 rounded text-xs"
+                    onClick={handleAIGenerate}
+                    disabled={!aiPrompt.trim()}
+                    className="w-full py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-sm font-medium transition"
                   >
-                    Remove
+                    Generate
                   </button>
                 </div>
-                <p className="text-[10px] text-zinc-400 truncate px-1.5 py-1">{m.name}</p>
+
+                <p className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium pt-1">
+                  Ready-made themes
+                </p>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {THEMES.map((theme) => (
+                    <button
+                      key={theme.id}
+                      onClick={() => applyTheme(theme)}
+                      className="group text-left p-3 rounded-xl border border-zinc-700 hover:border-violet-500/60 hover:bg-zinc-800/80 transition"
+                    >
+                      <div className="text-2xl mb-1">{theme.emoji}</div>
+                      <div className="text-sm font-medium text-zinc-200 group-hover:text-white">
+                        {theme.name}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">{theme.description}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            ))}
+            )}
+
+            {activeTab === "media" && (
+              <div className="space-y-3">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-3 rounded-xl border border-dashed border-zinc-600 hover:border-violet-500 hover:bg-zinc-800/50 text-sm transition"
+                >
+                  + Upload image or video
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+
+                {project.media.length === 0 ? (
+                  <p className="text-xs text-zinc-500 text-center mt-10">
+                    No media yet.<br />Upload to use as background.
+                  </p>
+                ) : (
+                  project.media.map((m) => (
+                    <div
+                      key={m.id}
+                      className="group relative rounded-xl overflow-hidden bg-zinc-800 border border-zinc-700"
+                    >
+                      {m.type === "image" ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.url} alt={m.name} className="w-full h-28 object-cover" />
+                      ) : (
+                        <div className="w-full h-28 flex items-center justify-center text-zinc-500 text-xs">
+                          Video file
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                        <button
+                          onClick={() => removeMedia(m.id)}
+                          className="px-3 py-1.5 bg-red-600 rounded-lg text-xs font-medium"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-400 truncate px-2 py-1.5">{m.name}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {activeTab === "text" && (
+              <div className="space-y-3">
+                <button
+                  onClick={addText}
+                  className="w-full py-2 rounded-lg bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 text-sm font-medium transition"
+                >
+                  + Add text overlay
+                </button>
+
+                {project.texts.length === 0 && (
+                  <p className="text-xs text-zinc-500 text-center mt-8">
+                    No text yet.<br />Apply a theme or add your own.
+                  </p>
+                )}
+
+                {project.texts.map((t) => (
+                  <div
+                    key={t.id}
+                    onClick={() => setSelectedTextId(t.id)}
+                    className={`p-3 rounded-xl border cursor-pointer transition ${
+                      selectedTextId === t.id
+                        ? "border-violet-500 bg-violet-500/10"
+                        : "border-zinc-700 hover:border-zinc-600"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <p className="text-sm font-medium truncate">{t.text || "Empty"}</p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeText(t.id);
+                        }}
+                        className="text-zinc-500 hover:text-red-400 text-xs shrink-0"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {selectedText && (
+                  <div className="space-y-3 pt-3 border-t border-zinc-800">
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Text</label>
+                      <input
+                        type="text"
+                        value={selectedText.text}
+                        onChange={(e) => updateText(selectedText.id, { text: e.target.value })}
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">Size</label>
+                        <input
+                          type="number"
+                          min={14}
+                          max={90}
+                          value={selectedText.fontSize}
+                          onChange={(e) =>
+                            updateText(selectedText.id, { fontSize: Number(e.target.value) })
+                          }
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">Color</label>
+                        <input
+                          type="color"
+                          value={selectedText.color}
+                          onChange={(e) => updateText(selectedText.id, { color: e.target.value })}
+                          className="w-full h-9 bg-zinc-800 border border-zinc-700 rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">X %</label>
+                        <input
+                          type="range"
+                          min={5}
+                          max={95}
+                          value={selectedText.x}
+                          onChange={(e) =>
+                            updateText(selectedText.id, { x: Number(e.target.value) })
+                          }
+                          className="w-full accent-violet-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-zinc-400 block mb-1">Y %</label>
+                        <input
+                          type="range"
+                          min={5}
+                          max={95}
+                          value={selectedText.y}
+                          onChange={(e) =>
+                            updateText(selectedText.id, { y: Number(e.target.value) })
+                          }
+                          className="w-full accent-violet-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-zinc-400 block mb-1">Weight</label>
+                      <select
+                        value={selectedText.fontWeight}
+                        onChange={(e) =>
+                          updateText(selectedText.id, {
+                            fontWeight: e.target.value as "normal" | "bold",
+                          })
+                        }
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
+                      >
+                        <option value="normal">Normal</option>
+                        <option value="bold">Bold</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </aside>
 
-        {/* Center \u2014 Preview */}
-        <main className="flex-1 flex flex-col items-center justify-center bg-zinc-950 p-6 relative">
-          <div className="relative shadow-2xl rounded-2xl overflow-hidden border border-zinc-800">
+        <main className="flex-1 flex flex-col items-center justify-center bg-zinc-950 p-6 relative min-w-0">
+          <div className="relative shadow-2xl rounded-2xl overflow-hidden border border-zinc-800 ring-1 ring-white/5">
             <canvas
               ref={canvasRef}
               width={360}
               height={640}
-              className="bg-black block max-h-[70vh] w-auto"
+              className="bg-black block max-h-[72vh] w-auto"
             />
           </div>
 
-          {/* Simple transport controls */}
-          <div className="mt-4 flex items-center gap-4">
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center"
-            >
-              {isPlaying ? "\u23F8" : "\u25B6"}
-            </button>
-            <div className="text-xs text-zinc-400 font-mono">
-              {Math.floor(currentTime)}s / {project.duration}s
-            </div>
+          <div className="mt-4 text-center">
+            <p className="text-xs text-zinc-500">
+              {project.themeName ? (
+                <>Theme: <span className="text-violet-400">{project.themeName}</span></>
+              ) : (
+                "No theme applied yet"
+              )}
+              {" · "}
+              {project.duration}s reel
+            </p>
           </div>
         </main>
 
-        {/* Right panel \u2014 Text & Settings */}
-        <aside className="w-72 border-l border-zinc-800 bg-zinc-900 flex flex-col">
-          <div className="p-3 border-b border-zinc-800 flex items-center justify-between">
-            <h2 className="text-sm font-medium text-zinc-300">Text & Style</h2>
-            <button
-              onClick={addText}
-              className="text-xs px-2 py-1 rounded bg-violet-600/20 text-violet-400 hover:bg-violet-600/30 transition"
-            >
-              + Add text
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto panel-scroll p-3 space-y-4">
-            {project.texts.length === 0 && (
-              <p className="text-xs text-zinc-500 text-center mt-6">
-                No text overlays yet.
-              </p>
-            )}
-
-            {project.texts.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => setSelectedTextId(t.id)}
-                className={`p-3 rounded-lg border cursor-pointer transition ${
-                  selectedTextId === t.id
-                    ? "border-violet-500 bg-violet-500/10"
-                    : "border-zinc-700 hover:border-zinc-600"
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <p className="text-sm font-medium truncate">{t.text || "Empty"}</p>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeText(t.id);
-                    }}
-                    className="text-zinc-500 hover:text-red-400 text-xs"
-                  >
-                    \u2715
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {selectedText && (
-              <div className="space-y-3 pt-2 border-t border-zinc-800">
-                <div>
-                  <label className="text-xs text-zinc-400 block mb-1">Text</label>
-                  <input
-                    type="text"
-                    value={selectedText.text}
-                    onChange={(e) => updateText(selectedText.id, { text: e.target.value })}
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Size</label>
-                    <input
-                      type="number"
-                      min={12}
-                      max={120}
-                      value={selectedText.fontSize}
-                      onChange={(e) =>
-                        updateText(selectedText.id, { fontSize: Number(e.target.value) })
-                      }
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Color</label>
-                    <input
-                      type="color"
-                      value={selectedText.color}
-                      onChange={(e) => updateText(selectedText.id, { color: e.target.value })}
-                      className="w-full h-9 bg-zinc-800 border border-zinc-700 rounded-lg cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-zinc-400 block mb-1">X position %</label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={selectedText.x}
-                      onChange={(e) =>
-                        updateText(selectedText.id, { x: Number(e.target.value) })
-                      }
-                      className="w-full"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-zinc-400 block mb-1">Y position %</label>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={selectedText.y}
-                      onChange={(e) =>
-                        updateText(selectedText.id, { y: Number(e.target.value) })
-                      }
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-zinc-400 block mb-1">Weight</label>
-                  <select
-                    value={selectedText.fontWeight}
-                    onChange={(e) =>
-                      updateText(selectedText.id, {
-                        fontWeight: e.target.value as "normal" | "bold",
-                      })
-                    }
-                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
-                  >
-                    <option value="normal">Normal</option>
-                    <option value="bold">Bold</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
-            {/* Duration */}
-            <div className="pt-4 border-t border-zinc-800">
-              <label className="text-xs text-zinc-400 block mb-1">
-                Reel duration (seconds)
-              </label>
-              <input
-                type="number"
-                min={3}
-                max={90}
-                value={project.duration}
-                onChange={(e) =>
-                  setProject((p) => ({ ...p, duration: Number(e.target.value) }))
-                }
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
-              />
-            </div>
+        <aside className="hidden xl:flex w-56 border-l border-zinc-800 bg-zinc-900/50 flex-col p-4 text-xs text-zinc-400 shrink-0">
+          <p className="font-medium text-zinc-300 mb-3">Quick start</p>
+          <ol className="space-y-3 list-decimal list-inside">
+            <li>Pick a theme or type a prompt in <span className="text-violet-400">AI Generate</span></li>
+            <li>Optionally upload a background image</li>
+            <li>Edit the text overlays</li>
+            <li>Click <span className="text-violet-400">Export PNG</span></li>
+          </ol>
+          <div className="mt-8 p-3 rounded-lg bg-zinc-800/60 border border-zinc-700">
+            <p className="text-[11px] leading-relaxed">
+              Full MP4 video export + social posting coming in the next update.
+            </p>
           </div>
         </aside>
       </div>
-
-      {/* Footer status */}
-      <footer className="px-4 py-2 border-t border-zinc-800 bg-zinc-900 text-xs text-zinc-500 flex justify-between">
-        <span>Ready for Vercel deployment</span>
-        <span>MVP v0.1 \u2014 full video export & social posting coming next</span>
-      </footer>
     </div>
   );
 }
