@@ -2,24 +2,9 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 
-type MediaItem = {
-  id: string;
-  type: "image" | "video";
-  url: string;
-  name: string;
-};
-
-type TextOverlay = {
-  id: string;
-  text: string;
-  x: number;
-  y: number;
-  fontSize: number;
-  color: string;
-  fontWeight: "normal" | "bold";
-};
-
-type TransitionType = "none" | "fade" | "slide" | "zoom";
+type MediaItem = { id: string; type: "image" | "video"; url: string; name: string };
+type TextOverlay = { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontWeight: "normal" | "bold" };
+type TransitionType = "none" | "fade" | "slide" | "zoom" | "crossfade";
 type EffectType = "none" | "bright" | "vintage" | "cool" | "warm" | "grayscale" | "contrast" | "soft";
 
 type Project = {
@@ -30,6 +15,8 @@ type Project = {
   secondsPerSlide: number;
   transition: TransitionType;
   effect: EffectType;
+  transitionDuration: number;
+  playbackSpeed: number;
 };
 
 type ThemeTemplate = {
@@ -87,6 +74,7 @@ const THEMES: ThemeTemplate[] = [
 const TRANSITIONS = [
   { id: "none" as TransitionType, label: "Cut" },
   { id: "fade" as TransitionType, label: "Fade" },
+  { id: "crossfade" as TransitionType, label: "Crossfade" },
   { id: "slide" as TransitionType, label: "Slide" },
   { id: "zoom" as TransitionType, label: "Zoom" },
 ];
@@ -101,6 +89,10 @@ const EFFECTS = [
   { id: "contrast" as EffectType, label: "Contrast" },
   { id: "soft" as EffectType, label: "Soft" },
 ];
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
 function generateAITemplate(prompt: string): ThemeTemplate {
   const lower = prompt.toLowerCase();
@@ -130,8 +122,10 @@ const DEFAULT_PROJECT: Project = {
   texts: [],
   backgroundColor: "#000000",
   secondsPerSlide: 3,
-  transition: "fade",
+  transition: "crossfade",
   effect: "none",
+  transitionDuration: 0.8,
+  playbackSpeed: 1,
 };
 
 export default function Home() {
@@ -143,11 +137,23 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [transitionProgress, setTransitionProgress] = useState(1);
+  const [playheadTime, setPlayheadTime] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const animFrameRef = useRef<number | null>(null);
+  const slideStartRef = useRef(0);
+  const isPlayingRef = useRef(false);
+  const indexRef = useRef(0);
+  const projectRef = useRef(project);
+
+  useEffect(() => { projectRef.current = project; }, [project]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { indexRef.current = currentSlideIndex; }, [currentSlideIndex]);
+
+  const effectiveSlideDuration = project.secondsPerSlide / Math.max(0.25, project.playbackSpeed);
+  const totalDuration = project.media.length > 0 ? project.media.length * effectiveSlideDuration : 0;
 
   useEffect(() => {
     project.media.forEach((m) => {
@@ -212,32 +218,45 @@ export default function Home() {
       warm: "sepia(0.25) saturate(1.3) brightness(1.05)",
       grayscale: "grayscale(1) contrast(1.1)",
       contrast: "contrast(1.4) brightness(1.05)",
-      soft: "blur(1.5px) brightness(1.05)",
+      soft: "blur(1.2px) brightness(1.05)",
     };
     ctx.filter = map[effect] || "none";
   };
 
-  const drawImageCover = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, cw: number, ch: number, scaleExtra = 1, ox = 0, oy = 0) => {
+  const drawImageCover = (
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    cw: number,
+    ch: number,
+    scaleExtra = 1,
+    ox = 0,
+    oy = 0,
+    alpha = 1
+  ) => {
+    ctx.save();
+    ctx.globalAlpha = alpha;
     const scale = Math.max(cw / img.width, ch / img.height) * scaleExtra;
     const w = img.width * scale;
     const h = img.height * scale;
     ctx.drawImage(img, (cw - w) / 2 + ox, (ch - h) / 2 + oy, w, h);
+    ctx.restore();
   };
 
-  const drawFrame = useCallback((slideIndex?: number, progress = 1) => {
+  const drawFrame = useCallback((slideIndex: number, progress: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const idx = slideIndex ?? currentSlideIndex;
-    const n = Math.max(project.media.length, 1);
+    const proj = projectRef.current;
+    const n = Math.max(proj.media.length, 1);
+    const idx = ((slideIndex % n) + n) % n;
     const prevIdx = (idx - 1 + n) % n;
 
-    ctx.fillStyle = project.backgroundColor;
+    ctx.fillStyle = proj.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (project.media.length === 0) {
+    if (proj.media.length === 0) {
       ctx.fillStyle = "#52525b";
       ctx.font = "20px system-ui";
       ctx.textAlign = "center";
@@ -249,40 +268,39 @@ export default function Home() {
     }
 
     const getImg = (url: string) => imageCache.current.get(url);
-    const currentMedia = project.media[idx % n];
-    const prevMedia = project.media[prevIdx % n];
-    const t = project.transition;
-    const p = progress;
+    const currentMedia = proj.media[idx];
+    const prevMedia = proj.media[prevIdx];
+    const t = proj.transition;
+    const p = easeInOutCubic(Math.min(1, Math.max(0, progress)));
 
     ctx.save();
-    applyEffect(ctx, project.effect);
+    applyEffect(ctx, proj.effect);
 
-    if (t === "none" || p >= 1) {
+    if (t === "none" || p >= 0.999) {
       const img = getImg(currentMedia.url);
       if (img?.complete) drawImageCover(ctx, img, canvas.width, canvas.height);
-    } else if (t === "fade") {
+    } else if (t === "fade" || t === "crossfade") {
       const prevImg = getImg(prevMedia.url);
-      if (prevImg?.complete) { ctx.globalAlpha = 1 - p; drawImageCover(ctx, prevImg, canvas.width, canvas.height); }
       const currImg = getImg(currentMedia.url);
-      if (currImg?.complete) { ctx.globalAlpha = p; drawImageCover(ctx, currImg, canvas.width, canvas.height); }
-      ctx.globalAlpha = 1;
+      if (prevImg?.complete) drawImageCover(ctx, prevImg, canvas.width, canvas.height, 1, 0, 0, 1 - p);
+      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, 0, 0, p);
     } else if (t === "slide") {
       const prevImg = getImg(prevMedia.url);
       const currImg = getImg(currentMedia.url);
-      if (prevImg?.complete) drawImageCover(ctx, prevImg, canvas.width, canvas.height, 1, -canvas.width * p, 0);
-      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, canvas.width * (1 - p), 0);
+      if (prevImg?.complete) drawImageCover(ctx, prevImg, canvas.width, canvas.height, 1, -canvas.width * p, 0, 1);
+      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, canvas.width * (1 - p), 0, 1);
     } else if (t === "zoom") {
       const prevImg = getImg(prevMedia.url);
       const currImg = getImg(currentMedia.url);
-      if (prevImg?.complete) { ctx.globalAlpha = 1 - p; drawImageCover(ctx, prevImg, canvas.width, canvas.height, 1 + p * 0.3); }
-      if (currImg?.complete) { ctx.globalAlpha = p; drawImageCover(ctx, currImg, canvas.width, canvas.height, 0.85 + p * 0.15); }
-      ctx.globalAlpha = 1;
+      if (prevImg?.complete) drawImageCover(ctx, prevImg, canvas.width, canvas.height, 1 + p * 0.25, 0, 0, 1 - p);
+      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 0.9 + p * 0.1, 0, 0, p);
     }
 
     ctx.restore();
     ctx.filter = "none";
+    ctx.globalAlpha = 1;
 
-    project.texts.forEach((txt) => {
+    proj.texts.forEach((txt) => {
       ctx.font = `${txt.fontWeight} ${txt.fontSize}px system-ui, -apple-system, sans-serif`;
       ctx.fillStyle = txt.color;
       ctx.textAlign = "center";
@@ -294,41 +312,89 @@ export default function Home() {
       ctx.fillText(txt.text, (txt.x / 100) * canvas.width, (txt.y / 100) * canvas.height);
       ctx.shadowColor = "transparent";
     });
-  }, [project, currentSlideIndex]);
-
-  useEffect(() => { drawFrame(currentSlideIndex, transitionProgress); }, [drawFrame, currentSlideIndex, transitionProgress]);
+  }, []);
 
   useEffect(() => {
-    if (isPlaying && project.media.length > 0) {
-      playIntervalRef.current = setInterval(() => {
-        const transitionMs = project.transition === "none" ? 0 : 550;
-        setTransitionProgress(0);
-        const start = performance.now();
-        const animate = (now: number) => {
-          const elapsed = now - start;
-          const p = Math.min(1, elapsed / Math.max(transitionMs, 1));
-          setTransitionProgress(p);
-          if (p < 1) requestAnimationFrame(animate);
-          else {
-            setCurrentSlideIndex((prev) => (prev + 1) % project.media.length);
-            setTransitionProgress(1);
-          }
-        };
-        if (transitionMs > 0) requestAnimationFrame(animate);
-        else {
-          setCurrentSlideIndex((prev) => (prev + 1) % project.media.length);
-          setTransitionProgress(1);
-        }
-      }, project.secondsPerSlide * 1000);
-    } else if (playIntervalRef.current) {
-      clearInterval(playIntervalRef.current);
-      playIntervalRef.current = null;
+    if (!isPlaying || project.media.length === 0) {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      return;
     }
-    return () => { if (playIntervalRef.current) clearInterval(playIntervalRef.current); };
-  }, [isPlaying, project.media.length, project.secondsPerSlide, project.transition]);
 
-  const togglePlay = () => { if (project.media.length === 0) return; setIsPlaying((p) => !p); };
-  const stopPlayback = () => { setIsPlaying(false); setCurrentSlideIndex(0); setTransitionProgress(1); };
+    slideStartRef.current = performance.now();
+
+    const tick = (now: number) => {
+      if (!isPlayingRef.current) return;
+
+      const p = projectRef.current;
+      const speed = Math.max(0.25, p.playbackSpeed);
+      const effDur = p.secondsPerSlide / speed;
+      const tMs = p.transition === "none" ? 0 : p.transitionDuration * 1000;
+      const hMs = Math.max(150, effDur * 1000 - tMs);
+      const totalMs = hMs + tMs;
+
+      let elapsed = now - slideStartRef.current;
+      let idx = indexRef.current;
+
+      while (elapsed >= totalMs && p.media.length > 0) {
+        elapsed -= totalMs;
+        idx = (idx + 1) % p.media.length;
+        indexRef.current = idx;
+        setCurrentSlideIndex(idx);
+        slideStartRef.current = now - elapsed;
+      }
+
+      let progress = 1;
+      if (elapsed >= hMs) {
+        progress = (elapsed - hMs) / Math.max(tMs, 1);
+      }
+
+      setTransitionProgress(progress);
+      setPlayheadTime(idx * effDur + elapsed / 1000);
+      drawFrame(idx, progress);
+
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    animFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isPlaying, project.media.length, project.secondsPerSlide, project.playbackSpeed, project.transition, project.transitionDuration, drawFrame]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      drawFrame(currentSlideIndex, transitionProgress);
+    }
+  }, [drawFrame, currentSlideIndex, transitionProgress, isPlaying, project]);
+
+  const togglePlay = () => {
+    if (project.media.length === 0) return;
+    if (!isPlaying) {
+      slideStartRef.current = performance.now();
+      setTransitionProgress(1);
+    }
+    setIsPlaying((p) => !p);
+  };
+
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setCurrentSlideIndex(0);
+    indexRef.current = 0;
+    setTransitionProgress(1);
+    setPlayheadTime(0);
+  };
+
+  const jumpToSlide = (i: number) => {
+    setIsPlaying(false);
+    setCurrentSlideIndex(i);
+    indexRef.current = i;
+    setTransitionProgress(1);
+    setPlayheadTime(i * effectiveSlideDuration);
+  };
 
   const handleExport = async () => {
     setExporting(true);
@@ -336,15 +402,18 @@ export default function Home() {
       const canvas = canvasRef.current;
       if (!canvas) return;
       drawFrame(currentSlideIndex, 1);
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 120));
       const link = document.createElement("a");
       link.download = `reel-${project.themeName || "custom"}-${Date.now()}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
-    } finally { setExporting(false); }
+    } finally {
+      setExporting(false);
+    }
   };
 
   const selectedText = project.texts.find((t) => t.id === selectedTextId);
+  const playheadPercent = totalDuration > 0 ? Math.min(100, (playheadTime / totalDuration) * 100) : 0;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-zinc-950 text-zinc-100">
@@ -353,7 +422,7 @@ export default function Home() {
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center font-bold text-sm shadow-lg shadow-violet-900/40">RF</div>
           <div>
             <h1 className="font-semibold text-lg leading-tight tracking-tight">ReelForge</h1>
-            <p className="text-[11px] text-zinc-400">AI • Effects • Transitions</p>
+            <p className="text-[11px] text-zinc-400">AI • Effects • Timeline</p>
           </div>
         </div>
         <button onClick={handleExport} disabled={exporting} className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-sm font-medium transition shadow-lg shadow-violet-900/30">
@@ -400,22 +469,22 @@ export default function Home() {
                   <p className="text-xs text-zinc-500 text-center mt-10">Upload photos to create a slideshow reel.</p>
                 ) : (
                   <>
-                    <p className="text-[11px] text-zinc-500">{project.media.length} slides · {project.secondsPerSlide}s each</p>
+                    <p className="text-[11px] text-zinc-500">{project.media.length} slides · {project.secondsPerSlide}s base · {project.playbackSpeed}x</p>
                     {project.media.map((m, i) => (
                       <div key={m.id} className={`group relative rounded-xl overflow-hidden bg-zinc-800 border transition ${currentSlideIndex === i ? "border-violet-500 ring-1 ring-violet-500/50" : "border-zinc-700"}`}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={m.url} alt={m.name} className="w-full h-24 object-cover" />
                         <div className="absolute top-1.5 left-1.5 bg-black/70 text-[10px] px-1.5 py-0.5 rounded">{i + 1}</div>
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
-                          <button onClick={() => { setCurrentSlideIndex(i); setIsPlaying(false); setTransitionProgress(1); }} className="px-2 py-1 bg-violet-600 rounded text-xs">View</button>
+                          <button onClick={() => jumpToSlide(i)} className="px-2 py-1 bg-violet-600 rounded text-xs">View</button>
                           <button onClick={() => removeMedia(m.id)} className="px-2 py-1 bg-red-600 rounded text-xs">Remove</button>
                         </div>
                         <p className="text-[10px] text-zinc-400 truncate px-2 py-1">{m.name}</p>
                       </div>
                     ))}
                     <div className="pt-2 border-t border-zinc-800">
-                      <label className="text-[11px] text-zinc-400 block mb-1">Seconds per photo</label>
-                      <input type="number" min={1} max={10} value={project.secondsPerSlide} onChange={(e) => setProject((p) => ({ ...p, secondsPerSlide: Math.max(1, Number(e.target.value) || 3) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500" />
+                      <label className="text-[11px] text-zinc-400 block mb-1">Seconds per photo (base)</label>
+                      <input type="number" min={1} max={12} step={0.5} value={project.secondsPerSlide} onChange={(e) => setProject((p) => ({ ...p, secondsPerSlide: Math.max(1, Number(e.target.value) || 3) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500" />
                     </div>
                   </>
                 )}
@@ -485,6 +554,10 @@ export default function Home() {
                   </div>
                 </div>
                 <div>
+                  <label className="text-[11px] text-zinc-400 block mb-1">Transition duration: {project.transitionDuration.toFixed(1)}s</label>
+                  <input type="range" min={0.3} max={1.5} step={0.1} value={project.transitionDuration} onChange={(e) => setProject((p) => ({ ...p, transitionDuration: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                </div>
+                <div>
                   <p className="text-[11px] text-zinc-500 uppercase tracking-wider font-medium mb-2">Visual Effects</p>
                   <div className="grid grid-cols-2 gap-2">
                     {EFFECTS.map((fx) => (
@@ -495,51 +568,67 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="rounded-lg bg-zinc-800/60 border border-zinc-700 p-3 text-[11px] text-zinc-400 leading-relaxed">
-                  Try <strong>Fade + Vintage</strong> or <strong>Zoom + Cool</strong>. Effects apply live while playing.
+                  <strong>Crossfade</strong> + longer duration feels smoothest. Use the speed slider under the timeline to slow or speed the whole reel.
                 </div>
               </div>
             )}
           </div>
         </aside>
 
-        <main className="flex-1 flex flex-col items-center justify-center bg-zinc-950 p-6 relative min-w-0">
+        <main className="flex-1 flex flex-col items-center justify-center bg-zinc-950 p-4 relative min-w-0">
           <div className="relative shadow-2xl rounded-2xl overflow-hidden border border-zinc-800 ring-1 ring-white/5">
-            <canvas ref={canvasRef} width={360} height={640} className="bg-black block max-h-[62vh] w-auto" />
+            <canvas ref={canvasRef} width={360} height={640} className="bg-black block max-h-[52vh] w-auto" />
           </div>
-          <div className="mt-5 flex flex-col items-center gap-3">
+
+          <div className="mt-4 flex flex-col items-center gap-3 w-full max-w-xl px-2">
             <div className="flex items-center gap-3">
-              <button onClick={stopPlayback} className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-lg transition">⏹</button>
+              <button onClick={stopPlayback} className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-lg transition" title="Stop">⏹</button>
               <button onClick={togglePlay} disabled={project.media.length === 0} className="w-14 h-14 rounded-full bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-2xl transition shadow-lg shadow-violet-900/40">
                 {isPlaying ? "⏸" : "▶"}
               </button>
-              <button onClick={() => { if (project.media.length === 0) return; setCurrentSlideIndex((i) => (i + 1) % project.media.length); setIsPlaying(false); setTransitionProgress(1); }} className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-lg transition">⏭</button>
+              <button onClick={() => { if (project.media.length === 0) return; jumpToSlide((currentSlideIndex + 1) % project.media.length); }} className="w-10 h-10 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-lg transition">⏭</button>
             </div>
-            <div className="text-xs text-zinc-400 font-mono text-center">
-              {project.media.length > 0 ? (
-                <>Slide {currentSlideIndex + 1}/{project.media.length} · {project.secondsPerSlide}s · <span className="text-violet-400">{project.transition}</span> · <span className="text-violet-400">{project.effect}</span></>
-              ) : "Upload photos to enable playback"}
+
+            <div className="flex items-center gap-3 w-full max-w-xs">
+              <span className="text-[11px] text-zinc-500 w-10">Slow</span>
+              <input type="range" min={0.5} max={2} step={0.1} value={project.playbackSpeed} onChange={(e) => setProject((p) => ({ ...p, playbackSpeed: Number(e.target.value) }))} className="flex-1 accent-violet-500" />
+              <span className="text-[11px] text-zinc-500 w-10 text-right">Fast</span>
+              <span className="text-xs font-mono text-violet-400 w-10">{project.playbackSpeed.toFixed(1)}x</span>
             </div>
-            {project.media.length > 1 && (
-              <div className="flex gap-1.5">
-                {project.media.map((_, i) => (
-                  <button key={i} onClick={() => { setCurrentSlideIndex(i); setIsPlaying(false); setTransitionProgress(1); }} className={`w-2 h-2 rounded-full transition ${i === currentSlideIndex ? "bg-violet-500" : "bg-zinc-600 hover:bg-zinc-500"}`} />
-                ))}
+
+            {project.media.length > 0 && (
+              <div className="w-full mt-1">
+                <div className="relative h-16 bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                  <div className="absolute inset-0 flex">
+                    {project.media.map((m, i) => (
+                      <button key={m.id} onClick={() => jumpToSlide(i)} className={`relative flex-1 border-r border-zinc-800 last:border-r-0 overflow-hidden transition ${currentSlideIndex === i ? "ring-2 ring-inset ring-violet-500" : "opacity-70 hover:opacity-100"}`}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={m.url} alt="" className="w-full h-full object-cover" />
+                        <span className="absolute bottom-1 left-1 text-[9px] bg-black/70 px-1 rounded text-white">{i + 1}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="absolute top-0 bottom-0 w-0.5 bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.8)] pointer-events-none z-10" style={{ left: `${playheadPercent}%` }} />
+                </div>
+                <div className="flex justify-between text-[10px] text-zinc-500 mt-1 font-mono px-0.5">
+                  <span>{Math.floor(playheadTime)}s / {Math.floor(totalDuration)}s</span>
+                  <span>{project.transition} · {project.transitionDuration.toFixed(1)}s · {project.effect}</span>
+                </div>
               </div>
             )}
           </div>
         </main>
 
-        <aside className="hidden xl:flex w-56 border-l border-zinc-800 bg-zinc-900/50 flex-col p-4 text-xs text-zinc-400 shrink-0">
-          <p className="font-medium text-zinc-300 mb-3">CapCut-style features</p>
+        <aside className="hidden xl:flex w-52 border-l border-zinc-800 bg-zinc-900/50 flex-col p-4 text-xs text-zinc-400 shrink-0">
+          <p className="font-medium text-zinc-300 mb-3">Tips for smooth reels</p>
           <ul className="space-y-2 list-disc list-inside">
-            <li>Transitions (Fade / Slide / Zoom)</li>
-            <li>Visual effects & filters</li>
-            <li>AI theme templates</li>
-            <li>Multi-image slideshow</li>
-            <li>Text overlays</li>
+            <li>Use <span className="text-violet-400">Crossfade</span> for the smoothest look</li>
+            <li>Raise transition duration to 0.8–1.0s</li>
+            <li>Slow the speed to 0.7x for cinematic feel</li>
+            <li>Click any thumbnail on the timeline to jump</li>
           </ul>
           <div className="mt-6 p-3 rounded-lg bg-zinc-800/60 border border-zinc-700">
-            <p className="text-[11px] leading-relaxed">Go to the <span className="text-violet-400">FX</span> tab, pick a transition + effect, then press Play.</p>
+            <p className="text-[11px] leading-relaxed">The playhead moves across the filmstrip as the reel plays. Drag the speed slider to slow or speed the whole sequence.</p>
           </div>
         </aside>
       </div>
