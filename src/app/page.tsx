@@ -159,14 +159,27 @@ export default function Home() {
   const totalDuration = project.media.length > 0 ? project.media.length * effectiveSlideDuration : 0;
 
   useEffect(() => {
+    let cancelled = false;
     project.media.forEach((m) => {
-      if (m.type === "image" && !imageCache.current.has(m.url)) {
-        const img = new Image();
+      if (m.type !== "image") return;
+      const cached = imageCache.current.get(m.url);
+      if (cached?.complete && cached.naturalWidth > 0) return;
+
+      const img = new Image();
+      // blob: URLs must NOT use crossOrigin — it prevents canvas from drawing them
+      if (!m.url.startsWith("blob:")) {
         img.crossOrigin = "anonymous";
-        img.src = m.url;
-        imageCache.current.set(m.url, img);
       }
+      img.onload = () => {
+        if (cancelled) return;
+        imageCache.current.set(m.url, img);
+        window.dispatchEvent(new Event("reelforge-redraw"));
+      };
+      img.onerror = () => console.warn("Failed to load", m.name);
+      img.src = m.url;
+      imageCache.current.set(m.url, img);
     });
+    return () => { cancelled = true; };
   }, [project.media]);
 
   const applyTheme = (theme: ThemeTemplate) => {
@@ -184,16 +197,21 @@ export default function Home() {
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach((file) => {
-      const url = URL.createObjectURL(file);
-      setProject((prev) => ({
-        ...prev,
-        media: [...prev.media, { id: crypto.randomUUID(), type: "image", url, name: file.name }],
-      }));
-    });
+    if (!files || files.length === 0) return;
+    const newItems: MediaItem[] = Array.from(files).map((file) => ({
+      id: crypto.randomUUID(),
+      type: "image" as const,
+      url: URL.createObjectURL(file),
+      name: file.name,
+    }));
+    setProject((prev) => ({
+      ...prev,
+      media: [...prev.media, ...newItems],
+    }));
     if (fileInputRef.current) fileInputRef.current.value = "";
     setActiveTab("media");
+    setCurrentSlideIndex(0);
+    indexRef.current = 0;
   }, []);
 
   const addText = () => {
@@ -281,22 +299,22 @@ export default function Home() {
 
     if (t === "none") {
       const img = getImg(currentMedia.url);
-      if (img?.complete) drawImageCover(ctx, img, canvas.width, canvas.height);
+      if (img && (img.complete || img.naturalWidth > 0)) drawImageCover(ctx, img, canvas.width, canvas.height);
     } else if (t === "fade" || t === "crossfade") {
       const currImg = getImg(currentMedia.url);
       const nextImg = getImg(nextMedia.url);
-      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, 0, 0, Math.max(0, 1 - p));
-      if (nextImg?.complete) drawImageCover(ctx, nextImg, canvas.width, canvas.height, 1, 0, 0, Math.min(1, p));
+      if (currImg && (currImg.complete || currImg.naturalWidth > 0)) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, 0, 0, Math.max(0, 1 - p));
+      if (nextImg && (nextImg.complete || nextImg.naturalWidth > 0)) drawImageCover(ctx, nextImg, canvas.width, canvas.height, 1, 0, 0, Math.min(1, p));
     } else if (t === "slide") {
       const currImg = getImg(currentMedia.url);
       const nextImg = getImg(nextMedia.url);
-      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, -canvas.width * p, 0, 1);
-      if (nextImg?.complete) drawImageCover(ctx, nextImg, canvas.width, canvas.height, 1, canvas.width * (1 - p), 0, 1);
+      if (currImg && (currImg.complete || currImg.naturalWidth > 0)) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1, -canvas.width * p, 0, 1);
+      if (nextImg && (nextImg.complete || nextImg.naturalWidth > 0)) drawImageCover(ctx, nextImg, canvas.width, canvas.height, 1, canvas.width * (1 - p), 0, 1);
     } else if (t === "zoom") {
       const currImg = getImg(currentMedia.url);
       const nextImg = getImg(nextMedia.url);
-      if (currImg?.complete) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1 + p * 0.2, 0, 0, 1 - p);
-      if (nextImg?.complete) drawImageCover(ctx, nextImg, canvas.width, canvas.height, 0.85 + p * 0.15, 0, 0, p);
+      if (currImg && (currImg.complete || currImg.naturalWidth > 0)) drawImageCover(ctx, currImg, canvas.width, canvas.height, 1 + p * 0.2, 0, 0, 1 - p);
+      if (nextImg && (nextImg.complete || nextImg.naturalWidth > 0)) drawImageCover(ctx, nextImg, canvas.width, canvas.height, 0.85 + p * 0.15, 0, 0, p);
     }
 
     ctx.restore();
@@ -379,6 +397,16 @@ export default function Home() {
     }
   }, [drawFrame, currentSlideIndex, isPlaying, project]);
 
+  useEffect(() => {
+    const onRedraw = () => {
+      if (!isPlayingRef.current) {
+        drawFrame(indexRef.current, 0);
+      }
+    };
+    window.addEventListener("reelforge-redraw", onRedraw);
+    return () => window.removeEventListener("reelforge-redraw", onRedraw);
+  }, [drawFrame]);
+
   const togglePlay = () => {
     if (project.media.length === 0) return;
     if (!isPlaying) {
@@ -438,7 +466,7 @@ export default function Home() {
               return;
             }
             const el = new Image();
-            el.crossOrigin = "anonymous";
+            if (!m.url.startsWith("blob:")) el.crossOrigin = "anonymous";
             el.onload = () => {
               imageCache.current.set(m.url, el);
               resolve();
