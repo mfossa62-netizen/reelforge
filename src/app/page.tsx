@@ -273,7 +273,6 @@ export default function Home() {
     const currentMedia = proj.media[idx];
     const nextMedia = proj.media[nextIdx];
     const t = proj.transition;
-    // progress: 0 = fully current, 1 = fully next (smooth outgoing blend)
     const p = easeInOutCubic(Math.min(1, Math.max(0, progress)));
 
     ctx.save();
@@ -352,7 +351,6 @@ export default function Home() {
         slideStartRef.current = now - elapsed;
       }
 
-      // 0 = fully current; ramps 0→1 while blending current → next
       let progress = 0;
       if (tMs > 0 && elapsed >= hMs) {
         progress = Math.min(1, (elapsed - hMs) / tMs);
@@ -427,22 +425,42 @@ export default function Home() {
     setExportingVideo(true);
     setExportProgress("Preparing…");
 
+    await Promise.all(
+      project.media.map(
+        (m) =>
+          new Promise<void>((resolve) => {
+            const img = imageCache.current.get(m.url);
+            if (img?.complete && img.naturalWidth > 0) {
+              resolve();
+              return;
+            }
+            const el = new Image();
+            el.crossOrigin = "anonymous";
+            el.onload = () => {
+              imageCache.current.set(m.url, el);
+              resolve();
+            };
+            el.onerror = () => resolve();
+            el.src = m.url;
+          })
+      )
+    );
+
     const chunks: Blob[] = [];
     const stream = canvas.captureStream(30);
 
     const mimeCandidates = [
-      "video/mp4;codecs=avc1.42E01E",
-      "video/mp4",
       "video/webm;codecs=vp9",
       "video/webm;codecs=vp8",
       "video/webm",
+      "video/mp4",
     ];
     const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
     const ext = mimeType.includes("mp4") ? "mp4" : "webm";
 
     let recorder: MediaRecorder;
     try {
-      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5_000_000 });
+      recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 6_000_000 });
     } catch {
       recorder = new MediaRecorder(stream);
     }
@@ -459,37 +477,44 @@ export default function Home() {
     const n = proj.media.length;
     const speed = Math.max(0.25, proj.playbackSpeed);
     const effDur = proj.secondsPerSlide / speed;
-    const tMs = proj.transition === "none" ? 0 : proj.transitionDuration * 1000;
-    const hMs = Math.max(150, effDur * 1000 - tMs);
-    const totalMs = n * (hMs + tMs);
+    const tSec = proj.transition === "none" ? 0 : Math.max(0.8, proj.transitionDuration);
+    const tMs = tSec * 1000;
+    const hMs = Math.max(300, effDur * 1000 - tMs);
+    const slideMs = hMs + tMs;
+    const totalMs = (n - 1) * slideMs + hMs;
 
-    recorder.start(100);
+    const fps = 30;
+    const frameDuration = 1000 / fps;
+    const totalFrames = Math.ceil(totalMs / frameDuration);
+
+    recorder.start(50);
     setExportProgress("Recording…");
 
-    const start = performance.now();
-    await new Promise<void>((resolve) => {
-      const tick = (now: number) => {
-        const elapsed = now - start;
-        if (elapsed >= totalMs) {
-          drawFrame(n - 1, 0);
-          resolve();
-          return;
-        }
-        const slideMs = hMs + tMs;
-        const idx = Math.min(n - 1, Math.floor(elapsed / slideMs));
+    for (let f = 0; f < totalFrames; f++) {
+      const elapsed = f * frameDuration;
+      let idx: number;
+      let progress: number;
+
+      if (elapsed >= (n - 1) * slideMs) {
+        idx = n - 1;
+        progress = 0;
+      } else {
+        idx = Math.floor(elapsed / slideMs);
         const local = elapsed - idx * slideMs;
-        let progress = 0;
+        progress = 0;
         if (tMs > 0 && local >= hMs) {
           progress = Math.min(1, (local - hMs) / tMs);
         }
-        drawFrame(idx, progress);
-        setExportProgress(`Recording… ${Math.min(100, Math.round((elapsed / totalMs) * 100))}%`);
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    });
+      }
 
-    await new Promise((r) => setTimeout(r, 200));
+      drawFrame(idx, progress);
+      setExportProgress(`Recording… ${Math.min(100, Math.round(((f + 1) / totalFrames) * 100))}%`);
+      await new Promise((r) => setTimeout(r, frameDuration));
+    }
+
+    drawFrame(n - 1, 0);
+    await new Promise((r) => setTimeout(r, 300));
+
     recorder.stop();
     setExportProgress("Saving…");
 
@@ -666,7 +691,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="rounded-lg bg-zinc-800/60 border border-zinc-700 p-3 text-[11px] text-zinc-400 leading-relaxed">
-                  <strong>Crossfade</strong> + longer duration feels smoothest. Use the speed slider under the timeline to slow or speed the whole reel.
+                  <strong>Crossfade</strong> + 1.0s+ duration feels smoothest. Export now captures every blend frame at 30fps.
                 </div>
               </div>
             )}
@@ -721,12 +746,12 @@ export default function Home() {
           <p className="font-medium text-zinc-300 mb-3">Tips for smooth reels</p>
           <ul className="space-y-2 list-disc list-inside">
             <li>Use <span className="text-violet-400">Crossfade</span> for the smoothest look</li>
-            <li>Raise transition duration to 0.8–1.0s</li>
+            <li>Raise transition duration to 1.0–1.5s</li>
             <li>Slow the speed to 0.7x for cinematic feel</li>
             <li>Click any thumbnail on the timeline to jump</li>
           </ul>
           <div className="mt-6 p-3 rounded-lg bg-zinc-800/60 border border-zinc-700">
-            <p className="text-[11px] leading-relaxed">The playhead moves across the filmstrip as the reel plays. Drag the speed slider to slow or speed the whole sequence.</p>
+            <p className="text-[11px] leading-relaxed">Export records every frame at 30fps so crossfades are fully captured. Wait for the progress bar to finish.</p>
           </div>
         </aside>
       </div>
