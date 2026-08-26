@@ -23,6 +23,24 @@ function ease(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+const TRANSITIONS: { id: TransitionType; label: string }[] = [
+  { id: "none", label: "Cut" },
+  { id: "fade", label: "Fade" },
+  { id: "crossfade", label: "Crossfade" },
+  { id: "slide", label: "Slide" },
+  { id: "zoom", label: "Zoom" },
+];
+const EFFECTS: { id: EffectType; label: string }[] = [
+  { id: "none", label: "None" },
+  { id: "bright", label: "Bright" },
+  { id: "vintage", label: "Vintage" },
+  { id: "cool", label: "Cool" },
+  { id: "warm", label: "Warm" },
+  { id: "grayscale", label: "B&W" },
+  { id: "contrast", label: "Contrast" },
+  { id: "soft", label: "Soft" },
+];
+
 const DEFAULT_PROJECT: Project = {
   media: [], texts: [], backgroundColor: "#000000",
   secondsPerSlide: 3, transition: "crossfade", effect: "none",
@@ -39,6 +57,8 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [playheadTime, setPlayheadTime] = useState(0);
+  const [customLooks, setCustomLooks] = useState<ThemeTemplate[]>([]);
+  const [lookName, setLookName] = useState("My look");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +70,12 @@ export default function Home() {
   const projectRef = useRef(project);
   const lastUiRef = useRef(0);
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("reelforge-custom-looks");
+      if (raw) setCustomLooks(JSON.parse(raw));
+    } catch {}
+  }, []);
   useEffect(() => { projectRef.current = project; }, [project]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { indexRef.current = currentSlideIndex; }, [currentSlideIndex]);
@@ -278,7 +304,7 @@ export default function Home() {
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div>
           <h1 className="font-semibold text-lg">ReelForge</h1>
-          <p className="text-[11px] text-zinc-400">Tap a look, swap your photos</p>
+          <p className="text-[11px] text-zinc-400">Tap a look or build your own in FX</p>
         </div>
         <button onClick={handleExportVideo} disabled={exportingVideo || project.media.length === 0} className="px-4 py-2 rounded-lg bg-violet-600 text-sm">
           {exportingVideo ? exportProgress || "Exporting…" : "Export Video"}
@@ -296,11 +322,20 @@ export default function Home() {
           <div className="flex-1 overflow-y-auto p-3">
             {activeTab === "themes" && (
               <div className="space-y-3">
-                <p className="text-[11px] text-zinc-400">Each look includes text, filter, transition and speed. Upload photos after you pick one.</p>
-                <div className="flex gap-2">
-                  <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="custom hook" className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-2 text-sm" />
-                  <button onClick={() => { if (!aiPrompt.trim()) return; applyTheme({ ...THEMES[0], name: "AI Custom", texts: [{ text: aiPrompt.slice(0, 40), x: 50, y: 48, fontSize: 30, color: "#ffffff", fontWeight: "bold" }] }); setAiPrompt(""); }} className="px-3 rounded-lg bg-violet-600 text-sm">Go</button>
-                </div>
+                <p className="text-[11px] text-zinc-400">Preset looks or your saved templates. Then swap in your photos.</p>
+                {customLooks.length > 0 && (
+                  <div>
+                    <p className="text-[11px] text-zinc-400 mb-2">My templates</p>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      {customLooks.map((theme) => (
+                        <button key={theme.id} onClick={() => applyTheme(theme)} className={`text-left p-3 rounded-xl border ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
+                          <div className="text-sm font-medium">{theme.name}</div>
+                          <div className="text-[9px] text-violet-300/80">{theme.transition} · {theme.effect}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   {THEMES.map((theme) => (
                     <button key={theme.id} onClick={() => applyTheme(theme)} className={`text-left p-3 rounded-xl border ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
@@ -337,10 +372,59 @@ export default function Home() {
               </div>
             )}
             {activeTab === "effects" && (
-              <div className="space-y-3 text-xs">
-                <p>Transition: {project.transition} · {project.transitionDuration}s</p>
-                <p>Look: {project.effect} · {project.playbackSpeed}x</p>
-                <p className="text-zinc-500">Change looks on the Looks tab. FX here is the current pack.</p>
+              <div className="space-y-4">
+                <p className="text-[11px] text-zinc-400">Build your own template. Changes apply to the preview immediately.</p>
+                <div>
+                  <p className="text-[11px] text-zinc-400 mb-2">Transition</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TRANSITIONS.map((tr) => (
+                      <button key={tr.id} onClick={() => setProject((p) => ({ ...p, transition: tr.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.transition === tr.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{tr.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-400">Blend {project.transitionDuration.toFixed(1)}s</label>
+                  <input type="range" min={0.4} max={2.5} step={0.1} value={project.transitionDuration} onChange={(e) => setProject((p) => ({ ...p, transitionDuration: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                </div>
+                <div>
+                  <p className="text-[11px] text-zinc-400 mb-2">Color grade</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {EFFECTS.map((fx) => (
+                      <button key={fx.id} onClick={() => setProject((p) => ({ ...p, effect: fx.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.effect === fx.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{fx.label}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-400">Seconds per photo {project.secondsPerSlide.toFixed(1)}</label>
+                  <input type="range" min={1} max={6} step={0.5} value={project.secondsPerSlide} onChange={(e) => setProject((p) => ({ ...p, secondsPerSlide: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                </div>
+                <div>
+                  <label className="text-[11px] text-zinc-400">Speed {project.playbackSpeed.toFixed(1)}x</label>
+                  <input type="range" min={0.5} max={2} step={0.1} value={project.playbackSpeed} onChange={(e) => setProject((p) => ({ ...p, playbackSpeed: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                </div>
+                <div className="pt-2 border-t border-zinc-800 space-y-2">
+                  <p className="text-[11px] text-zinc-400">Save as my template</p>
+                  <input value={lookName} onChange={(e) => setLookName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+                  <button onClick={() => {
+                    const look: ThemeTemplate = {
+                      id: `mine-${Date.now()}`,
+                      name: lookName.trim() || "My look",
+                      emoji: "*",
+                      description: "Custom",
+                      backgroundColor: project.backgroundColor,
+                      texts: project.texts.map(({ id: _id, ...rest }) => rest),
+                      transition: project.transition,
+                      effect: project.effect,
+                      transitionDuration: project.transitionDuration,
+                      secondsPerSlide: project.secondsPerSlide,
+                      playbackSpeed: project.playbackSpeed,
+                    };
+                    const next = [look, ...customLooks].slice(0, 20);
+                    setCustomLooks(next);
+                    localStorage.setItem("reelforge-custom-looks", JSON.stringify(next));
+                    setProject((p) => ({ ...p, themeName: look.name }));
+                  }} className="w-full py-2 rounded-lg bg-violet-600 text-sm">Save look</button>
+                </div>
               </div>
             )}
           </div>
