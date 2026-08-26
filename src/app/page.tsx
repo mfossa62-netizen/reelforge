@@ -149,6 +149,7 @@ export default function Home() {
   const isPlayingRef = useRef(false);
   const indexRef = useRef(0);
   const projectRef = useRef(project);
+  const lastUiUpdateRef = useRef(0);
 
   useEffect(() => { projectRef.current = project; }, [project]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
@@ -329,6 +330,7 @@ export default function Home() {
     }
 
     slideStartRef.current = performance.now();
+    lastUiUpdateRef.current = 0;
 
     const tick = (now: number) => {
       if (!isPlayingRef.current) return;
@@ -356,9 +358,15 @@ export default function Home() {
         progress = Math.min(1, (elapsed - hMs) / tMs);
       }
 
-      setTransitionProgress(progress);
-      setPlayheadTime(idx * effDur + elapsed / 1000);
+      // Draw every frame — never blocked by React
       drawFrame(idx, progress);
+
+      // Throttle UI state (~12fps) so re-renders don't interrupt the blend
+      if (now - lastUiUpdateRef.current > 80) {
+        lastUiUpdateRef.current = now;
+        setTransitionProgress(progress);
+        setPlayheadTime(idx * effDur + elapsed / 1000);
+      }
 
       animFrameRef.current = requestAnimationFrame(tick);
     };
@@ -368,7 +376,7 @@ export default function Home() {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isPlaying, project.media.length, project.secondsPerSlide, project.playbackSpeed, project.transition, project.transitionDuration, drawFrame]);
+  }, [isPlaying, project.media.length, drawFrame]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -691,7 +699,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="rounded-lg bg-zinc-800/60 border border-zinc-700 p-3 text-[11px] text-zinc-400 leading-relaxed">
-                  <strong>Crossfade</strong> + 1.0s+ duration feels smoothest. Export now captures every blend frame at 30fps.
+                  <strong>Crossfade</strong> + 1.0–1.5s duration. Preview and export both blend current → next smoothly.
                 </div>
               </div>
             )}
@@ -748,11 +756,8 @@ export default function Home() {
             <li>Use <span className="text-violet-400">Crossfade</span> for the smoothest look</li>
             <li>Raise transition duration to 1.0–1.5s</li>
             <li>Slow the speed to 0.7x for cinematic feel</li>
-            <li>Click any thumbnail on the timeline to jump</li>
+            <li>Watch the preview — blends should be visible before export</li>
           </ul>
-          <div className="mt-6 p-3 rounded-lg bg-zinc-800/60 border border-zinc-700">
-            <p className="text-[11px] leading-relaxed">Export records every frame at 30fps so crossfades are fully captured. Wait for the progress bar to finish.</p>
-          </div>
         </aside>
       </div>
     </div>
