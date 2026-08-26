@@ -50,7 +50,6 @@ const DEFAULT_PROJECT: Project = {
 export default function Home() {
   const [project, setProject] = useState<Project>(DEFAULT_PROJECT);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
-  const [aiPrompt, setAiPrompt] = useState("");
   const [exportingVideo, setExportingVideo] = useState(false);
   const [exportProgress, setExportProgress] = useState("");
   const [activeTab, setActiveTab] = useState<"themes" | "media" | "text" | "effects">("themes");
@@ -125,6 +124,19 @@ export default function Home() {
     if (fileInputRef.current) fileInputRef.current.value = "";
     setCurrentSlideIndex(0);
     indexRef.current = 0;
+  };
+
+  const moveMedia = (from: number, to: number) => {
+    setProject((p) => {
+      if (to < 0 || to >= p.media.length || from === to) return p;
+      const media = [...p.media];
+      const [item] = media.splice(from, 1);
+      media.splice(to, 0, item);
+      return { ...p, media };
+    });
+    setIsPlaying(false);
+    setCurrentSlideIndex(to);
+    indexRef.current = to;
   };
 
   const applyEffect = (ctx: CanvasRenderingContext2D, effect: EffectType) => {
@@ -304,7 +316,7 @@ export default function Home() {
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div>
           <h1 className="font-semibold text-lg">ReelForge</h1>
-          <p className="text-[11px] text-zinc-400">Tap a look or build your own in FX</p>
+          <p className="text-[11px] text-zinc-400">Reorder photos in Media</p>
         </div>
         <button onClick={handleExportVideo} disabled={exportingVideo || project.media.length === 0} className="px-4 py-2 rounded-lg bg-violet-600 text-sm">
           {exportingVideo ? exportProgress || "Exporting…" : "Export Video"}
@@ -322,7 +334,6 @@ export default function Home() {
           <div className="flex-1 overflow-y-auto p-3">
             {activeTab === "themes" && (
               <div className="space-y-3">
-                <p className="text-[11px] text-zinc-400">Preset looks or your saved templates. Then swap in your photos.</p>
                 {customLooks.length > 0 && (
                   <div>
                     <p className="text-[11px] text-zinc-400 mb-2">My templates</p>
@@ -330,7 +341,6 @@ export default function Home() {
                       {customLooks.map((theme) => (
                         <button key={theme.id} onClick={() => applyTheme(theme)} className={`text-left p-3 rounded-xl border ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
                           <div className="text-sm font-medium">{theme.name}</div>
-                          <div className="text-[9px] text-violet-300/80">{theme.transition} · {theme.effect}</div>
                         </button>
                       ))}
                     </div>
@@ -341,7 +351,7 @@ export default function Home() {
                     <button key={theme.id} onClick={() => applyTheme(theme)} className={`text-left p-3 rounded-xl border ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
                       <div className="text-2xl">{theme.emoji}</div>
                       <div className="text-sm font-medium">{theme.name}</div>
-                      <div className="text-[9px] text-violet-300/80">{theme.transition} · {theme.effect} · {theme.playbackSpeed}x</div>
+                      <div className="text-[9px] text-violet-300/80">{theme.transition} · {theme.effect}</div>
                     </button>
                   ))}
                 </div>
@@ -349,12 +359,18 @@ export default function Home() {
             )}
             {activeTab === "media" && (
               <div className="space-y-3">
-                <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-zinc-600 text-sm">+ Replace / add photos</button>
+                <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-zinc-600 text-sm">+ Add photos</button>
+                <p className="text-[11px] text-zinc-400">Drag a photo onto another, or tap Up / Dn.</p>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
                 {project.media.map((m, i) => (
-                  <div key={m.id} className={`relative rounded-xl overflow-hidden border ${currentSlideIndex === i ? "border-violet-500" : "border-zinc-700"}`}>
-                    <img src={m.url} alt={m.name} className="w-full h-20 object-cover" />
-                    <button onClick={() => setProject((p) => ({ ...p, media: p.media.filter((x) => x.id !== m.id) }))} className="absolute top-1 right-1 text-[10px] bg-red-600 px-1.5 rounded">x</button>
+                  <div key={m.id} draggable onDragStart={(e) => { e.dataTransfer.setData("text/plain", String(i)); e.dataTransfer.effectAllowed = "move"; }} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); moveMedia(Number(e.dataTransfer.getData("text/plain")), i); }} className={`relative rounded-xl overflow-hidden border cursor-grab ${currentSlideIndex === i ? "border-violet-500" : "border-zinc-700"}`}>
+                    <img src={m.url} alt={m.name} className="w-full h-20 object-cover pointer-events-none" />
+                    <div className="absolute top-1 left-1 flex flex-col gap-1">
+                      <button type="button" disabled={i === 0} onClick={() => moveMedia(i, i - 1)} className="text-[10px] bg-black/70 px-1.5 rounded disabled:opacity-30">Up</button>
+                      <button type="button" disabled={i === project.media.length - 1} onClick={() => moveMedia(i, i + 1)} className="text-[10px] bg-black/70 px-1.5 rounded disabled:opacity-30">Dn</button>
+                    </div>
+                    <div className="absolute bottom-1 left-1 text-[10px] bg-black/70 px-1.5 rounded">{i + 1}</div>
+                    <button type="button" onClick={() => setProject((p) => ({ ...p, media: p.media.filter((x) => x.id !== m.id) }))} className="absolute top-1 right-1 text-[10px] bg-red-600 px-1.5 rounded">x</button>
                   </div>
                 ))}
               </div>
@@ -373,58 +389,36 @@ export default function Home() {
             )}
             {activeTab === "effects" && (
               <div className="space-y-4">
-                <p className="text-[11px] text-zinc-400">Build your own template. Changes apply to the preview immediately.</p>
-                <div>
-                  <p className="text-[11px] text-zinc-400 mb-2">Transition</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {TRANSITIONS.map((tr) => (
-                      <button key={tr.id} onClick={() => setProject((p) => ({ ...p, transition: tr.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.transition === tr.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{tr.label}</button>
-                    ))}
-                  </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {TRANSITIONS.map((tr) => (
+                    <button key={tr.id} onClick={() => setProject((p) => ({ ...p, transition: tr.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.transition === tr.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{tr.label}</button>
+                  ))}
                 </div>
-                <div>
-                  <label className="text-[11px] text-zinc-400">Blend {project.transitionDuration.toFixed(1)}s</label>
-                  <input type="range" min={0.4} max={2.5} step={0.1} value={project.transitionDuration} onChange={(e) => setProject((p) => ({ ...p, transitionDuration: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                <label className="text-[11px] text-zinc-400">Blend {project.transitionDuration.toFixed(1)}s</label>
+                <input type="range" min={0.4} max={2.5} step={0.1} value={project.transitionDuration} onChange={(e) => setProject((p) => ({ ...p, transitionDuration: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                <div className="grid grid-cols-2 gap-2">
+                  {EFFECTS.map((fx) => (
+                    <button key={fx.id} onClick={() => setProject((p) => ({ ...p, effect: fx.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.effect === fx.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{fx.label}</button>
+                  ))}
                 </div>
-                <div>
-                  <p className="text-[11px] text-zinc-400 mb-2">Color grade</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {EFFECTS.map((fx) => (
-                      <button key={fx.id} onClick={() => setProject((p) => ({ ...p, effect: fx.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.effect === fx.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{fx.label}</button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[11px] text-zinc-400">Seconds per photo {project.secondsPerSlide.toFixed(1)}</label>
-                  <input type="range" min={1} max={6} step={0.5} value={project.secondsPerSlide} onChange={(e) => setProject((p) => ({ ...p, secondsPerSlide: Number(e.target.value) }))} className="w-full accent-violet-500" />
-                </div>
-                <div>
-                  <label className="text-[11px] text-zinc-400">Speed {project.playbackSpeed.toFixed(1)}x</label>
-                  <input type="range" min={0.5} max={2} step={0.1} value={project.playbackSpeed} onChange={(e) => setProject((p) => ({ ...p, playbackSpeed: Number(e.target.value) }))} className="w-full accent-violet-500" />
-                </div>
-                <div className="pt-2 border-t border-zinc-800 space-y-2">
-                  <p className="text-[11px] text-zinc-400">Save as my template</p>
-                  <input value={lookName} onChange={(e) => setLookName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
-                  <button onClick={() => {
-                    const look: ThemeTemplate = {
-                      id: `mine-${Date.now()}`,
-                      name: lookName.trim() || "My look",
-                      emoji: "*",
-                      description: "Custom",
-                      backgroundColor: project.backgroundColor,
-                      texts: project.texts.map(({ id: _id, ...rest }) => rest),
-                      transition: project.transition,
-                      effect: project.effect,
-                      transitionDuration: project.transitionDuration,
-                      secondsPerSlide: project.secondsPerSlide,
-                      playbackSpeed: project.playbackSpeed,
-                    };
-                    const next = [look, ...customLooks].slice(0, 20);
-                    setCustomLooks(next);
-                    localStorage.setItem("reelforge-custom-looks", JSON.stringify(next));
-                    setProject((p) => ({ ...p, themeName: look.name }));
-                  }} className="w-full py-2 rounded-lg bg-violet-600 text-sm">Save look</button>
-                </div>
+                <label className="text-[11px] text-zinc-400">Seconds {project.secondsPerSlide.toFixed(1)}</label>
+                <input type="range" min={1} max={6} step={0.5} value={project.secondsPerSlide} onChange={(e) => setProject((p) => ({ ...p, secondsPerSlide: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                <label className="text-[11px] text-zinc-400">Speed {project.playbackSpeed.toFixed(1)}x</label>
+                <input type="range" min={0.5} max={2} step={0.1} value={project.playbackSpeed} onChange={(e) => setProject((p) => ({ ...p, playbackSpeed: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                <input value={lookName} onChange={(e) => setLookName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+                <button onClick={() => {
+                  const look: ThemeTemplate = {
+                    id: `mine-${Date.now()}`, name: lookName.trim() || "My look", emoji: "*", description: "Custom",
+                    backgroundColor: project.backgroundColor,
+                    texts: project.texts.map(({ id: _id, ...rest }) => rest),
+                    transition: project.transition, effect: project.effect,
+                    transitionDuration: project.transitionDuration, secondsPerSlide: project.secondsPerSlide, playbackSpeed: project.playbackSpeed,
+                  };
+                  const next = [look, ...customLooks].slice(0, 20);
+                  setCustomLooks(next);
+                  localStorage.setItem("reelforge-custom-looks", JSON.stringify(next));
+                  setProject((p) => ({ ...p, themeName: look.name }));
+                }} className="w-full py-2 rounded-lg bg-violet-600 text-sm">Save look</button>
               </div>
             )}
           </div>
