@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { THEMES, type ThemeTemplate } from "@/lib/themes";
 
 type MediaItem = { id: string; type: "image"; url: string; name: string; scale: number; panX: number; panY: number };
-type TextOverlay = { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontWeight: "normal" | "bold" };
+type TextOverlay = { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontWeight: "normal" | "bold"; fontFamily: string };
 type TransitionType = "none" | "fade" | "slide" | "zoom" | "crossfade";
 type EffectType = "none" | "bright" | "vintage" | "cool" | "warm" | "grayscale" | "contrast" | "soft";
 type Project = {
@@ -25,6 +25,14 @@ function ease(t: number) {
 
 const TRANSITIONS: { id: TransitionType; label: string }[] = [
   { id: "none", label: "Cut" }, { id: "fade", label: "Fade" }, { id: "crossfade", label: "Crossfade" }, { id: "slide", label: "Slide" }, { id: "zoom", label: "Zoom" },
+];
+const FONTS = [
+  { id: "system-ui, sans-serif", label: "Sans" },
+  { id: "Georgia, serif", label: "Serif" },
+  { id: "ui-monospace, monospace", label: "Mono" },
+  { id: "Impact, Haettenschweiler, sans-serif", label: "Impact" },
+  { id: '"Palatino Linotype", Palatino, serif', label: "Editorial" },
+  { id: "Trebuchet MS, sans-serif", label: "Clean" },
 ];
 const EFFECTS: { id: EffectType; label: string }[] = [
   { id: "none", label: "None" }, { id: "bright", label: "Bright" }, { id: "vintage", label: "Vintage" }, { id: "cool", label: "Cool" },
@@ -85,7 +93,7 @@ export default function Home() {
   }, [project.media]);
 
   const applyTheme = (theme: ThemeTemplate) => {
-    const texts = theme.texts.map((t) => ({ ...t, id: crypto.randomUUID() }));
+    const texts = theme.texts.map((t) => ({ ...t, id: crypto.randomUUID(), fontFamily: (t as TextOverlay).fontFamily || "system-ui, sans-serif" }));
     setProject((p) => ({ ...p, backgroundColor: theme.backgroundColor, texts, themeName: theme.name, transition: theme.transition, effect: theme.effect, transitionDuration: theme.transitionDuration, secondsPerSlide: theme.secondsPerSlide, playbackSpeed: theme.playbackSpeed }));
     setSelectedTextId(texts[0]?.id || null);
     setActiveTab("media");
@@ -177,7 +185,7 @@ export default function Home() {
     ctx.restore();
     ctx.filter = "none"; ctx.globalAlpha = 1;
     proj.texts.forEach((txt) => {
-      ctx.font = `${txt.fontWeight} ${txt.fontSize}px system-ui`;
+      ctx.font = `${txt.fontWeight} ${txt.fontSize}px ${txt.fontFamily || "system-ui, sans-serif"}`;
       ctx.fillStyle = txt.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 8;
       ctx.fillText(txt.text, (txt.x / 100) * canvas.width, (txt.y / 100) * canvas.height);
@@ -264,7 +272,7 @@ export default function Home() {
     e.preventDefault();
     const item = project.media[currentSlideIndex];
     if (!item) return;
-    const next = Math.min(3, Math.max(1, (item.scale || 1) + (e.deltaY < 0 ? 0.08 : -0.08)));
+    const next = Math.min(3, Math.max(0.4, (item.scale || 1) + (e.deltaY < 0 ? 0.08 : -0.08)));
     updateCurrentMedia({ scale: Number(next.toFixed(2)) });
   };
 
@@ -312,7 +320,7 @@ export default function Home() {
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div>
           <h1 className="font-semibold text-lg">ReelForge</h1>
-          <p className="text-[11px] text-zinc-400">Drag photo or text on the preview</p>
+          <p className="text-[11px] text-zinc-400">Scale photos and style text</p>
         </div>
         <button onClick={handleExportVideo} disabled={exportingVideo || project.media.length === 0} className="px-4 py-2 rounded-lg bg-violet-600 text-sm">{exportingVideo ? exportProgress || "Exporting…" : "Export Video"}</button>
       </header>
@@ -337,13 +345,17 @@ export default function Home() {
             {activeTab === "media" && (
               <div className="space-y-3">
                 <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-zinc-600 text-sm">+ Add photos</button>
-                <p className="text-[11px] text-zinc-400">Use Move photo under the preview, then drag. Scroll to zoom.</p>
+                <p className="text-[11px] text-zinc-400">Size in frame: use - / + or the slider. Scroll on the preview also scales.</p>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
                 {currentMedia && (
                   <div className="rounded-xl border border-zinc-700 p-3 space-y-2">
                     <p className="text-[11px] text-zinc-400">Photo {currentSlideIndex + 1} frame</p>
-                    <label className="text-[11px] text-zinc-400">Scale {(currentMedia.scale || 1).toFixed(2)}x</label>
-                    <input type="range" min={1} max={3} step={0.05} value={currentMedia.scale || 1} onChange={(e) => updateCurrentMedia({ scale: Number(e.target.value) })} className="w-full accent-violet-500" />
+                    <label className="text-[11px] text-zinc-400">Size in frame {(currentMedia.scale || 1).toFixed(2)}x</label>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => updateCurrentMedia({ scale: Math.max(0.4, Number(((currentMedia.scale || 1) - 0.1).toFixed(2))) })} className="px-2 py-1 rounded bg-zinc-800 text-sm">-</button>
+                      <input type="range" min={0.4} max={3} step={0.05} value={currentMedia.scale || 1} onChange={(e) => updateCurrentMedia({ scale: Number(e.target.value) })} className="flex-1 accent-violet-500" />
+                      <button type="button" onClick={() => updateCurrentMedia({ scale: Math.min(3, Number(((currentMedia.scale || 1) + 0.1).toFixed(2))) })} className="px-2 py-1 rounded bg-zinc-800 text-sm">+</button>
+                    </div>
                     <button onClick={() => updateCurrentMedia({ scale: 1, panX: 0, panY: 0 })} className="w-full py-1.5 rounded-lg bg-zinc-800 text-xs">Reset frame</button>
                   </div>
                 )}
@@ -362,14 +374,28 @@ export default function Home() {
             )}
             {activeTab === "text" && (
               <div className="space-y-3">
-                <p className="text-[11px] text-zinc-400">Select a line, tap Move text, then drag on the preview.</p>
-                <button onClick={() => { const t: TextOverlay = { id: crypto.randomUUID(), text: "New text", x: 50, y: 50, fontSize: 32, color: "#ffffff", fontWeight: "bold" }; setProject((p) => ({ ...p, texts: [...p.texts, t] })); setSelectedTextId(t.id); setEditTarget("text"); }} className="w-full py-2 rounded-lg bg-violet-600/20 text-violet-400 text-sm">+ Add text</button>
+                <p className="text-[11px] text-zinc-400">Select a line to change font and size.</p>
+                <button onClick={() => { const t: TextOverlay = { id: crypto.randomUUID(), text: "New text", x: 50, y: 50, fontSize: 32, color: "#ffffff", fontWeight: "bold", fontFamily: "system-ui, sans-serif" }; setProject((p) => ({ ...p, texts: [...p.texts, t] })); setSelectedTextId(t.id); setEditTarget("text"); }} className="w-full py-2 rounded-lg bg-violet-600/20 text-violet-400 text-sm">+ Add text</button>
                 {project.texts.map((t) => (
                   <div key={t.id} onClick={() => { setSelectedTextId(t.id); setEditTarget("text"); }} className={`p-3 rounded-xl border cursor-pointer ${selectedTextId === t.id ? "border-violet-500" : "border-zinc-700"}`}><p className="text-sm truncate">{t.text}</p></div>
                 ))}
                 {selectedText && (
                   <div className="space-y-2">
                     <input value={selectedText.text} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, text: e.target.value } : t)) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+                    <label className="text-[11px] text-zinc-400">Font</label>
+                    <select value={selectedText.fontFamily || "system-ui, sans-serif"} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, fontFamily: e.target.value } : t)) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                      {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+                    </select>
+                    <label className="text-[11px] text-zinc-400">Text size {selectedText.fontSize}px</label>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontSize: Math.max(12, t.fontSize - 2) } : t) }))} className="px-2 py-1 rounded bg-zinc-800">-</button>
+                      <input type="range" min={12} max={72} value={selectedText.fontSize} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, fontSize: Number(e.target.value) } : t)) }))} className="flex-1 accent-violet-500" />
+                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontSize: Math.min(72, t.fontSize + 2) } : t) }))} className="px-2 py-1 rounded bg-zinc-800">+</button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontWeight: "normal" } : t) }))} className={`flex-1 py-1 rounded text-xs border ${selectedText.fontWeight === "normal" ? "border-violet-500" : "border-zinc-700"}`}>Regular</button>
+                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontWeight: "bold" } : t) }))} className={`flex-1 py-1 rounded text-xs border ${selectedText.fontWeight === "bold" ? "border-violet-500" : "border-zinc-700"}`}>Bold</button>
+                    </div>
                     <label className="text-[11px] text-zinc-400">Left / right {Math.round(selectedText.x)}%</label>
                     <input type="range" min={8} max={92} value={selectedText.x} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, x: Number(e.target.value) } : t)) }))} className="w-full accent-violet-500" />
                     <label className="text-[11px] text-zinc-400">Up / down {Math.round(selectedText.y)}%</label>
