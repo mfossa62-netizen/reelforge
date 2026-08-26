@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { THEMES, type ThemeTemplate } from "@/lib/themes";
 
 type MediaItem = { id: string; type: "image" | "video"; url: string; name: string };
 type TextOverlay = { id: string; text: string; x: number; y: number; fontSize: number; color: string; fontWeight: "normal" | "bold" };
 type TransitionType = "none" | "fade" | "slide" | "zoom" | "crossfade";
 type EffectType = "none" | "bright" | "vintage" | "cool" | "warm" | "grayscale" | "contrast" | "soft";
-
 type Project = {
   media: MediaItem[];
   texts: TextOverlay[];
@@ -19,41 +19,474 @@ type Project = {
   playbackSpeed: number;
 };
 
-type ThemeTemplate = {
-  id: string;
-  name: string;
-  emoji: string;
-  description: string;
-  backgroundColor: string;
-  texts: Omit<TextOverlay, "id">[];
+const TRANSITIONS: { id: TransitionType; label: string }[] = [
+  { id: "none", label: "Cut" },
+  { id: "fade", label: "Fade" },
+  { id: "crossfade", label: "Crossfade" },
+  { id: "slide", label: "Slide" },
+  { id: "zoom", label: "Zoom" },
+];
+const EFFECTS: { id: EffectType; label: string }[] = [
+  { id: "none", label: "None" },
+  { id: "bright", label: "Bright" },
+  { id: "vintage", label: "Vintage" },
+  { id: "cool", label: "Cool" },
+  { id: "warm", label: "Warm" },
+  { id: "grayscale", label: "B&W" },
+  { id: "contrast", label: "Contrast" },
+  { id: "soft", label: "Soft" },
+];
+
+function ease(t: number) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+const DEFAULT_PROJECT: Project = {
+  media: [],
+  texts: [],
+  backgroundColor: "#000000",
+  secondsPerSlide: 3,
+  transition: "crossfade",
+  effect: "none",
+  transitionDuration: 1.2,
+  playbackSpeed: 1,
 };
 
-const THEMES: ThemeTemplate[] = [
-  { id: "motivation", name: "Motivation", emoji: "🔥", description: "Bold hooks & energy", backgroundColor: "#0f0f0f", texts: [{ text: "STOP SCROLLING", x: 50, y: 28, fontSize: 42, color: "#ffffff", fontWeight: "bold" }, { text: "This changes everything", x: 50, y: 48, fontSize: 28, color: "#fbbf24", fontWeight: "bold" }, { text: "Save this for later 👇", x: 50, y: 78, fontSize: 22, color: "#a3a3a3", fontWeight: "normal" }] },
-  { id: "fitness", name: "Fitness", emoji: "💪", description: "Gym & transformation", backgroundColor: "#111827", texts: [{ text: "DAY 47", x: 50, y: 22, fontSize: 56, color: "#22c55e", fontWeight: "bold" }, { text: "No excuses.", x: 50, y: 42, fontSize: 36, color: "#ffffff", fontWeight: "bold" }, { text: "Just results.", x: 50, y: 58, fontSize: 32, color: "#86efac", fontWeight: "normal" }] },
-  { id: "business", name: "Business", emoji: "💼", description: "Clean & professional", backgroundColor: "#0c0a09", texts: [{ text: "THE TRUTH ABOUT", x: 50, y: 30, fontSize: 26, color: "#a8a29e", fontWeight: "normal" }, { text: "Building Wealth", x: 50, y: 48, fontSize: 40, color: "#fafaf9", fontWeight: "bold" }, { text: "in 2026", x: 50, y: 65, fontSize: 28, color: "#f59e0b", fontWeight: "bold" }] },
-  { id: "travel", name: "Travel", emoji: "✈️", description: "Wanderlust vibes", backgroundColor: "#0c4a6e", texts: [{ text: "Hidden gem ✨", x: 50, y: 25, fontSize: 28, color: "#7dd3fc", fontWeight: "normal" }, { text: "You need to visit", x: 50, y: 45, fontSize: 36, color: "#ffffff", fontWeight: "bold" }, { text: "this place", x: 50, y: 62, fontSize: 34, color: "#e0f2fe", fontWeight: "bold" }] },
-  { id: "food", name: "Food", emoji: "🍕", description: "Tasty & colorful", backgroundColor: "#7c2d12", texts: [{ text: "Recipe in 30 seconds", x: 50, y: 28, fontSize: 26, color: "#fdba74", fontWeight: "normal" }, { text: "You will CRY", x: 50, y: 48, fontSize: 42, color: "#ffffff", fontWeight: "bold" }, { text: "when you try this", x: 50, y: 68, fontSize: 28, color: "#fed7aa", fontWeight: "normal" }] },
-  { id: "fashion", name: "Fashion", emoji: "👗", description: "Style & aesthetic", backgroundColor: "#1e1b4b", texts: [{ text: "OUTFIT OF THE DAY", x: 50, y: 25, fontSize: 22, color: "#c4b5fd", fontWeight: "normal" }, { text: "Steal this look", x: 50, y: 45, fontSize: 38, color: "#ffffff", fontWeight: "bold" }, { text: "Link in bio 🔗", x: 50, y: 72, fontSize: 24, color: "#a78bfa", fontWeight: "normal" }] },
-  { id: "neon", name: "Neon", emoji: "💜", description: "Cyber & vibrant", backgroundColor: "#0f0518", texts: [{ text: "NIGHT MODE", x: 50, y: 30, fontSize: 32, color: "#e879f9", fontWeight: "bold" }, { text: "ON", x: 50, y: 50, fontSize: 64, color: "#22d3ee", fontWeight: "bold" }, { text: "Stay until the end", x: 50, y: 75, fontSize: 22, color: "#c026d3", fontWeight: "normal" }] },
-  { id: "minimal", name: "Minimal", emoji: "✨", description: "Clean & simple", backgroundColor: "#fafafa", texts: [{ text: "less is more", x: 50, y: 42, fontSize: 36, color: "#171717", fontWeight: "normal" }, { text: "—", x: 50, y: 55, fontSize: 28, color: "#a3a3a3", fontWeight: "normal" }, { text: "keep it simple", x: 50, y: 68, fontSize: 22, color: "#525252", fontWeight: "normal" }] },
-  { id: "pov", name: "POV", emoji: "👀", description: "CapCut-style hook", backgroundColor: "#09090b", texts: [{ text: "POV", x: 50, y: 22, fontSize: 56, color: "#f43f5e", fontWeight: "bold" }, { text: "you just found this", x: 50, y: 46, fontSize: 28, color: "#ffffff", fontWeight: "bold" }, { text: "wait for it...", x: 50, y: 76, fontSize: 20, color: "#a1a1aa", fontWeight: "normal" }] },
-  { id: "grwm", name: "GRWM", emoji: "💄", description: "Get ready with me", backgroundColor: "#4c0519", texts: [{ text: "GRWM", x: 50, y: 24, fontSize: 48, color: "#fda4af", fontWeight: "bold" }, { text: "date night edition", x: 50, y: 46, fontSize: 26, color: "#ffffff", fontWeight: "bold" }, { text: "products in comments", x: 50, y: 76, fontSize: 18, color: "#fecdd3", fontWeight: "normal" }] },
-  { id: "storytime", name: "Storytime", emoji: "📖", description: "Tell the story", backgroundColor: "#1c1917", texts: [{ text: "STORYTIME", x: 50, y: 24, fontSize: 36, color: "#fbbf24", fontWeight: "bold" }, { text: "you won't believe this", x: 50, y: 48, fontSize: 28, color: "#ffffff", fontWeight: "bold" }, { text: "part 1 👇", x: 50, y: 76, fontSize: 20, color: "#a8a29e", fontWeight: "normal" }] },
-  { id: "beforeafter", name: "Before/After", emoji: "⚡", description: "Transformation split", backgroundColor: "#18181b", texts: [{ text: "BEFORE", x: 28, y: 22, fontSize: 26, color: "#a1a1aa", fontWeight: "bold" }, { text: "AFTER", x: 72, y: 22, fontSize: 26, color: "#22c55e", fontWeight: "bold" }, { text: "same place. different life.", x: 50, y: 78, fontSize: 18, color: "#ffffff", fontWeight: "normal" }] },
-  { id: "threetips", name: "3 Tips", emoji: "3️⃣", description: "Listicle hook", backgroundColor: "#172554", texts: [{ text: "3 THINGS", x: 50, y: 26, fontSize: 36, color: "#93c5fd", fontWeight: "bold" }, { text: "nobody tells you", x: 50, y: 46, fontSize: 28, color: "#ffffff", fontWeight: "bold" }, { text: "save this 📌", x: 50, y: 76, fontSize: 20, color: "#bfdbfe", fontWeight: "normal" }] },
-  { id: "quote", name: "Quote", emoji: "💬", description: "Canva quote card", backgroundColor: "#0f172a", texts: [{ text: "Make it look easy.", x: 50, y: 48, fontSize: 30, color: "#f8fafc", fontWeight: "bold" }, { text: "— your next caption", x: 50, y: 74, fontSize: 16, color: "#94a3b8", fontWeight: "normal" }] },
-  { id: "sale", name: "Sale", emoji: "🏷️", description: "Promo & drop", backgroundColor: "#450a0a", texts: [{ text: "50% OFF", x: 50, y: 28, fontSize: 52, color: "#fde68a", fontWeight: "bold" }, { text: "this weekend only", x: 50, y: 50, fontSize: 24, color: "#ffffff", fontWeight: "bold" }, { text: "shop the link", x: 50, y: 76, fontSize: 20, color: "#fecaca", fontWeight: "normal" }] },
-  { id: "realestate", name: "Listing", emoji: "🏠", description: "Property showcase", backgroundColor: "#0b1220", texts: [{ text: "JUST LISTED", x: 50, y: 22, fontSize: 24, color: "#fbbf24", fontWeight: "bold" }, { text: "Waterfront living", x: 50, y: 46, fontSize: 32, color: "#ffffff", fontWeight: "bold" }, { text: "DM for a private tour", x: 50, y: 76, fontSize: 18, color: "#cbd5e1", fontWeight: "normal" }] },
-  { id: "luxury", name: "Luxury", emoji: "🥂", description: "Dark gold editorial", backgroundColor: "#111111", texts: [{ text: "QUIET LUXURY", x: 50, y: 28, fontSize: 28, color: "#d4af37", fontWeight: "bold" }, { text: "details matter", x: 50, y: 50, fontSize: 34, color: "#f5f5f4", fontWeight: "bold" }, { text: "follow for more", x: 50, y: 76, fontSize: 16, color: "#a8a29e", fontWeight: "normal" }] },
-  { id: "wellness", name: "Wellness", emoji: "🧘", description: "Calm & soft", backgroundColor: "#14532d", texts: [{ text: "slow morning", x: 50, y: 28, fontSize: 28, color: "#bbf7d0", fontWeight: "normal" }, { text: "protect your peace", x: 50, y: 50, fontSize: 30, color: "#ffffff", fontWeight: "bold" }, { text: "breathe", x: 50, y: 76, fontSize: 20, color: "#86efac", fontWeight: "normal" }] },
-  { id: "pets", name: "Pets", emoji: "🐾", description: "Cute & playful", backgroundColor: "#422006", texts: [{ text: "meet the star", x: 50, y: 24, fontSize: 24, color: "#fdba74", fontWeight: "normal" }, { text: "good boy energy", x: 50, y: 48, fontSize: 32, color: "#ffffff", fontWeight: "bold" }, { text: "like if you smiled", x: 50, y: 76, fontSize: 18, color: "#fed7aa", fontWeight: "normal" }] },
-  { id: "tutorial", name: "Tutorial", emoji: "🎬", description: "How-to steps", backgroundColor: "#1e1b4b", texts: [{ text: "HOW TO", x: 50, y: 24, fontSize: 36, color: "#c4b5fd", fontWeight: "bold" }, { text: "do this in 10 seconds", x: 50, y: 48, fontSize: 24, color: "#ffffff", fontWeight: "bold" }, { text: "step 1", x: 50, y: 76, fontSize: 20, color: "#a78bfa", fontWeight: "normal" }] },
-  { id: "countdown", name: "Countdown", emoji: "⏳", description: "Urgency hook", backgroundColor: "#3b0764", texts: [{ text: "3... 2... 1...", x: 50, y: 28, fontSize: 32, color: "#e9d5ff", fontWeight: "bold" }, { text: "don't skip this", x: 50, y: 50, fontSize: 30, color: "#ffffff", fontWeight: "bold" }, { text: "ending is worth it", x: 50, y: 76, fontSize: 18, color: "#d8b4fe", fontWeight: "normal" }] },
-  { id: "aesthetic", name: "Aesthetic", emoji: "🌸", description: "Soft vibe", backgroundColor: "#4a1942", texts: [{ text: "main character", x: 50, y: 28, fontSize: 26, color: "#fbcfe8", fontWeight: "normal" }, { text: "soft life loading", x: 50, y: 50, fontSize: 30, color: "#ffffff", fontWeight: "bold" }, { text: "sound on", x: 50, y: 76, fontSize: 18, color: "#f9a8d4", fontWeight: "normal" }] },
-  { id: "streetwear", name: "Streetwear", emoji: "🧢", description: "Urban drop", backgroundColor: "#0a0a0a", texts: [{ text: "NEW DROP", x: 50, y: 26, fontSize: 40, color: "#fafafa", fontWeight: "bold" }, { text: "limited pieces", x: 50, y: 48, fontSize: 26, color: "#f97316", fontWeight: "bold" }, { text: "tap to cop", x: 50, y: 76, fontSize: 18, color: "#a3a3a3", fontWeight: "normal" }] },
-  { id: "product", name: "Product", emoji: "📦", description: "UGC product style", backgroundColor: "#1f2937", texts: [{ text: "Amazon find", x: 50, y: 24, fontSize: 22, color: "#fbbf24", fontWeight: "bold" }, { text: "under $20", x: 50, y: 48, fontSize: 36, color: "#ffffff", fontWeight: "bold" }, { text: "link in bio", x: 50, y: 76, fontSize: 20, color: "#d1d5db", fontWeight: "normal" }] },
-  { id: "wedding", name: "Wedding", emoji: "💍", description: "Romantic showcase", backgroundColor: "#3f2e2e", texts: [{ text: "the day we said yes", x: 50, y: 26, fontSize: 22, color: "#f5d0c5", fontWeight: "normal" }, { text: "forever starts here", x: 50, y: 50, fontSize: 28, color: "#fff7ed", fontWeight: "bold" }, { text: "save the date", x: 50, y: 76, fontSize: 18, color: "#e7d5c5", fontWeight: "normal" }] },
-  { id: "coffee", name: "Cafe", emoji: "☕", description: "Cozy cafe reel", backgroundColor: "#292524", texts: [{ text: "best latte in town", x: 50, y: 26, fontSize: 24, color: "#d6d3d1", fontWeight: "normal" }, { text: "first sip hits", x: 50, y: 50, fontSize: 34, color: "#fef3c7", fontWeight: "bold" }, { text: "tag a coffee friend", x: 50, y: 76, fontSize: 16, color: "#a8a29e", fontWeight: "normal" }] },
-  { id: "nightout", name: "Night Out", emoji: "🌃", description: "City after dark", backgroundColor: "#020617", texts: [{ text: "Friday energy", x: 50, y: 26, fontSize: 24, color: "#67e8f9", fontWeight: "normal" }, { text: "lights. city. us.", x: 50, y: 50, fontSize: 32, color: "#ffffff", fontWeight: "bold" }, { text: "who is coming?", x: 50, y: 76, fontSize: 18, color: "#94a3b8", fontWeight: "normal" }] }
-];
+export default function Home() {
+  const [project, setProject] = useState<Project>(DEFAULT_PROJECT);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportingVideo, setExportingVideo] = useState(false);
+  const [exportProgress, setExportProgress] = useState("");
+  const [activeTab, setActiveTab] = useState<"themes" | "media" | "text" | "effects">("themes");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [playheadTime, setPlayheadTime] = useState(0);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const animFrameRef = useRef<number | null>(null);
+  const slideStartRef = useRef(0);
+  const isPlayingRef = useRef(false);
+  const indexRef = useRef(0);
+  const projectRef = useRef(project);
+  const lastUiRef = useRef(0);
+
+  useEffect(() => { projectRef.current = project; }, [project]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { indexRef.current = currentSlideIndex; }, [currentSlideIndex]);
+
+  const slideDur = project.secondsPerSlide / Math.max(0.25, project.playbackSpeed);
+  const totalDuration = project.media.length * slideDur;
+
+  useEffect(() => {
+    project.media.forEach((m) => {
+      if (m.type !== "image") return;
+      const cached = imageCache.current.get(m.url);
+      if (cached?.complete && cached.naturalWidth > 0) return;
+      const img = new Image();
+      if (!m.url.startsWith("blob:")) img.crossOrigin = "anonymous";
+      img.onload = () => {
+        imageCache.current.set(m.url, img);
+        window.dispatchEvent(new Event("reelforge-redraw"));
+      };
+      img.src = m.url;
+      imageCache.current.set(m.url, img);
+    });
+  }, [project.media]);
+
+  const applyTheme = (theme: ThemeTemplate) => {
+    const texts = theme.texts.map((t) => ({ ...t, id: crypto.randomUUID() }));
+    setProject((p) => ({ ...p, backgroundColor: theme.backgroundColor, texts, themeName: theme.name }));
+    setSelectedTextId(texts[0]?.id || null);
+    setActiveTab("text");
+  };
+
+  const handleAIGenerate = () => {
+    if (!aiPrompt.trim()) return;
+    const q = aiPrompt.toLowerCase();
+    const base = THEMES.find((t) => q.includes(t.id) || q.includes(t.name.toLowerCase())) || THEMES[0];
+    applyTheme({
+      ...base,
+      id: "ai-custom",
+      name: "AI Custom",
+      texts: [
+        { text: "LISTEN UP", x: 50, y: 26, fontSize: 28, color: "#fbbf24", fontWeight: "bold" },
+        { text: aiPrompt.slice(0, 40), x: 50, y: 48, fontSize: 30, color: "#ffffff", fontWeight: "bold" },
+        { text: "Comment if you agree", x: 50, y: 75, fontSize: 18, color: "#a3a3a3", fontWeight: "normal" },
+      ],
+    });
+    setAiPrompt("");
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    const items: MediaItem[] = Array.from(files).map((file) => ({
+      id: crypto.randomUUID(),
+      type: "image",
+      url: URL.createObjectURL(file),
+      name: file.name,
+    }));
+    setProject((p) => ({ ...p, media: [...p.media, ...items] }));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setActiveTab("media");
+    setCurrentSlideIndex(0);
+    indexRef.current = 0;
+  };
+
+  const applyEffect = (ctx: CanvasRenderingContext2D, effect: EffectType) => {
+    const map: Record<EffectType, string> = {
+      none: "none",
+      bright: "brightness(1.25) contrast(1.05)",
+      vintage: "sepia(0.45) contrast(1.1) brightness(0.95)",
+      cool: "hue-rotate(190deg) saturate(1.2)",
+      warm: "sepia(0.25) saturate(1.3)",
+      grayscale: "grayscale(1) contrast(1.1)",
+      contrast: "contrast(1.4)",
+      soft: "blur(1px) brightness(1.05)",
+    };
+    ctx.filter = map[effect] || "none";
+  };
+
+  const cover = (
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    cw: number,
+    ch: number,
+    scaleExtra = 1,
+    ox = 0,
+    oy = 0,
+    alpha = 1
+  ) => {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const scale = Math.max(cw / img.width, ch / img.height) * scaleExtra;
+    const w = img.width * scale;
+    const h = img.height * scale;
+    ctx.drawImage(img, (cw - w) / 2 + ox, (ch - h) / 2 + oy, w, h);
+    ctx.restore();
+  };
+
+  const drawFrame = useCallback((slideIndex: number, progress: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const proj = projectRef.current;
+    const n = Math.max(proj.media.length, 1);
+    const idx = ((slideIndex % n) + n) % n;
+    const nextIdx = (idx + 1) % n;
+    ctx.fillStyle = proj.backgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (proj.media.length === 0) {
+      ctx.fillStyle = "#52525b";
+      ctx.font = "18px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("Choose a theme or upload media", canvas.width / 2, canvas.height / 2);
+      return;
+    }
+    const ready = (img?: HTMLImageElement) => !!(img && (img.complete || img.naturalWidth > 0));
+    const curr = imageCache.current.get(proj.media[idx].url);
+    const next = imageCache.current.get(proj.media[nextIdx].url);
+    const p = ease(Math.min(1, Math.max(0, progress)));
+    ctx.save();
+    applyEffect(ctx, proj.effect);
+    const t = proj.transition;
+    if (t === "none") {
+      if (ready(curr)) cover(ctx, curr!, canvas.width, canvas.height);
+    } else if (t === "slide") {
+      if (ready(curr)) cover(ctx, curr!, canvas.width, canvas.height, 1, -canvas.width * p, 0, 1);
+      if (ready(next)) cover(ctx, next!, canvas.width, canvas.height, 1, canvas.width * (1 - p), 0, 1);
+    } else if (t === "zoom") {
+      if (ready(curr)) cover(ctx, curr!, canvas.width, canvas.height, 1 + p * 0.2, 0, 0, 1 - p);
+      if (ready(next)) cover(ctx, next!, canvas.width, canvas.height, 0.85 + p * 0.15, 0, 0, p);
+    } else {
+      if (ready(curr)) cover(ctx, curr!, canvas.width, canvas.height, 1, 0, 0, Math.max(0, 1 - p));
+      if (ready(next)) cover(ctx, next!, canvas.width, canvas.height, 1, 0, 0, Math.min(1, p));
+    }
+    ctx.restore();
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
+    proj.texts.forEach((txt) => {
+      ctx.font = `${txt.fontWeight} ${txt.fontSize}px system-ui`;
+      ctx.fillStyle = txt.color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.shadowColor = "rgba(0,0,0,0.7)";
+      ctx.shadowBlur = 8;
+      ctx.fillText(txt.text, (txt.x / 100) * canvas.width, (txt.y / 100) * canvas.height);
+      ctx.shadowColor = "transparent";
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying || project.media.length === 0) {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      return;
+    }
+    slideStartRef.current = performance.now();
+    const tick = (now: number) => {
+      if (!isPlayingRef.current) return;
+      const p = projectRef.current;
+      const speed = Math.max(0.25, p.playbackSpeed);
+      const eff = p.secondsPerSlide / speed;
+      const tMs = p.transition === "none" ? 0 : p.transitionDuration * 1000;
+      const hMs = Math.max(150, eff * 1000 - tMs);
+      const totalMs = hMs + tMs;
+      let elapsed = now - slideStartRef.current;
+      let idx = indexRef.current;
+      while (elapsed >= totalMs && p.media.length > 0) {
+        elapsed -= totalMs;
+        idx = (idx + 1) % p.media.length;
+        indexRef.current = idx;
+        slideStartRef.current = now - elapsed;
+      }
+      let progress = 0;
+      if (tMs > 0 && elapsed >= hMs) progress = Math.min(1, (elapsed - hMs) / tMs);
+      drawFrame(idx, progress);
+      if (now - lastUiRef.current > 100) {
+        lastUiRef.current = now;
+        setPlayheadTime(idx * eff + elapsed / 1000);
+        setCurrentSlideIndex(idx);
+      }
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+    animFrameRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, [isPlaying, project.media.length, drawFrame]);
+
+  useEffect(() => {
+    if (!isPlaying) drawFrame(currentSlideIndex, 0);
+  }, [drawFrame, currentSlideIndex, isPlaying, project]);
+
+  useEffect(() => {
+    const onRedraw = () => {
+      if (!isPlayingRef.current) drawFrame(indexRef.current, 0);
+    };
+    window.addEventListener("reelforge-redraw", onRedraw);
+    return () => window.removeEventListener("reelforge-redraw", onRedraw);
+  }, [drawFrame]);
+
+  const jumpToSlide = (i: number) => {
+    setIsPlaying(false);
+    setCurrentSlideIndex(i);
+    indexRef.current = i;
+    setPlayheadTime(i * slideDur);
+  };
+
+  const handleExportPng = async () => {
+    setExporting(true);
+    try {
+      drawFrame(currentSlideIndex, 0);
+      await new Promise((r) => setTimeout(r, 80));
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const a = document.createElement("a");
+      a.download = `reel-${Date.now()}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportVideo = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || project.media.length === 0) return;
+    setIsPlaying(false);
+    setExportingVideo(true);
+    setExportProgress("Preparing…");
+    await Promise.all(
+      project.media.map(
+        (m) =>
+          new Promise<void>((resolve) => {
+            const img = imageCache.current.get(m.url);
+            if (img?.complete && img.naturalWidth > 0) return resolve();
+            const el = new Image();
+            if (!m.url.startsWith("blob:")) el.crossOrigin = "anonymous";
+            el.onload = () => {
+              imageCache.current.set(m.url, el);
+              resolve();
+            };
+            el.onerror = () => resolve();
+            el.src = m.url;
+          })
+      )
+    );
+    const chunks: Blob[] = [];
+    const stream = canvas.captureStream(30);
+    const mimeCandidates = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+    const mimeType = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "video/webm";
+    const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 6_000_000 });
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    const done = new Promise<Blob>((resolve) => {
+      recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+    });
+    const p = projectRef.current;
+    const n = p.media.length;
+    const eff = p.secondsPerSlide / Math.max(0.25, p.playbackSpeed);
+    const tMs = p.transition === "none" ? 0 : Math.max(800, p.transitionDuration * 1000);
+    const hMs = Math.max(300, eff * 1000 - tMs);
+    const slideMs = hMs + tMs;
+    const totalMs = (n - 1) * slideMs + hMs;
+    const frameDuration = 1000 / 30;
+    const totalFrames = Math.ceil(totalMs / frameDuration);
+    recorder.start(50);
+    for (let f = 0; f < totalFrames; f++) {
+      const elapsed = f * frameDuration;
+      let idx = n - 1;
+      let progress = 0;
+      if (elapsed < (n - 1) * slideMs) {
+        idx = Math.floor(elapsed / slideMs);
+        const local = elapsed - idx * slideMs;
+        if (tMs > 0 && local >= hMs) progress = Math.min(1, (local - hMs) / tMs);
+      }
+      drawFrame(idx, progress);
+      setExportProgress(`Recording… ${Math.round(((f + 1) / totalFrames) * 100)}%`);
+      await new Promise((r) => setTimeout(r, frameDuration));
+    }
+    recorder.stop();
+    const blob = await done;
+    const a = document.createElement("a");
+    a.download = `reel-${Date.now()}.${ext}`;
+    a.href = URL.createObjectURL(blob);
+    a.click();
+    setExportingVideo(false);
+    setExportProgress("");
+  };
+
+  const selectedText = project.texts.find((t) => t.id === selectedTextId);
+  const playheadPercent = totalDuration > 0 ? Math.min(100, (playheadTime / totalDuration) * 100) : 0;
+
+  return (
+    <div className="flex flex-col h-screen overflow-hidden bg-zinc-950 text-zinc-100">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 flex items-center justify-center font-bold text-sm">RF</div>
+          <div>
+            <h1 className="font-semibold text-lg leading-tight">ReelForge</h1>
+            <p className="text-[11px] text-zinc-400">AI • Effects • Timeline</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={handleExportPng} disabled={exporting || exportingVideo} className="px-3 py-2 rounded-lg bg-zinc-800 text-sm">{exporting ? "…" : "PNG"}</button>
+          <button onClick={handleExportVideo} disabled={exporting || exportingVideo || project.media.length === 0} className="px-4 py-2 rounded-lg bg-violet-600 text-sm">{exportingVideo ? exportProgress || "Exporting…" : "Export Video"}</button>
+        </div>
+      </header>
+      <div className="flex flex-1 overflow-hidden">
+        <aside className="w-72 border-r border-zinc-800 bg-zinc-900 flex flex-col shrink-0">
+          <div className="flex border-b border-zinc-800 text-[11px]">
+            {(["themes", "media", "text", "effects"] as const).map((tab) => (
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-2.5 capitalize ${activeTab === tab ? "text-violet-400 border-b-2 border-violet-500" : "text-zinc-500"}`}>
+                {tab === "themes" ? "AI" : tab === "effects" ? "FX" : tab}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-y-auto p-3">
+            {activeTab === "themes" && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-3 space-y-2">
+                  <p className="text-xs text-violet-300">AI Generate</p>
+                  <input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAIGenerate()} placeholder="e.g. gym motivation" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+                  <button onClick={handleAIGenerate} className="w-full py-2 rounded-lg bg-violet-600 text-sm">Generate</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {THEMES.map((theme) => (
+                    <button key={theme.id} onClick={() => applyTheme(theme)} className="text-left p-3 rounded-xl border border-zinc-700 hover:border-violet-500">
+                      <div className="text-2xl mb-1">{theme.emoji}</div>
+                      <div className="text-sm font-medium">{theme.name}</div>
+                      <div className="text-[10px] text-zinc-500">{theme.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {activeTab === "media" && (
+              <div className="space-y-3">
+                <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-zinc-600 text-sm">+ Upload images</button>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
+                {project.media.map((m, i) => (
+                  <div key={m.id} className={`relative rounded-xl overflow-hidden border ${currentSlideIndex === i ? "border-violet-500" : "border-zinc-700"}`}>
+                    <img src={m.url} alt={m.name} className="w-full h-24 object-cover" />
+                    <div className="absolute top-1 left-1 bg-black/70 text-[10px] px-1.5 rounded">{i + 1}</div>
+                    <p className="text-[10px] text-zinc-400 truncate px-2 py-1">{m.name}</p>
+                    <button onClick={() => setProject((p) => ({ ...p, media: p.media.filter((x) => x.id !== m.id) }))} className="absolute top-1 right-1 text-[10px] bg-red-600 px-1.5 rounded">x</button>
+                  </div>
+                ))}
+                <label className="text-[11px] text-zinc-400 block">Seconds per photo</label>
+                <input type="number" min={1} max={12} step={0.5} value={project.secondsPerSlide} onChange={(e) => setProject((p) => ({ ...p, secondsPerSlide: Math.max(1, Number(e.target.value) || 3) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+              </div>
+            )}
+            {activeTab === "text" && (
+              <div className="space-y-3">
+                <button onClick={() => { const t: TextOverlay = { id: crypto.randomUUID(), text: "New text", x: 50, y: 50, fontSize: 36, color: "#ffffff", fontWeight: "bold" }; setProject((p) => ({ ...p, texts: [...p.texts, t] })); setSelectedTextId(t.id); }} className="w-full py-2 rounded-lg bg-violet-600/20 text-violet-400 text-sm">+ Add text</button>
+                {project.texts.map((t) => (
+                  <div key={t.id} onClick={() => setSelectedTextId(t.id)} className={`p-3 rounded-xl border cursor-pointer ${selectedTextId === t.id ? "border-violet-500" : "border-zinc-700"}`}>
+                    <p className="text-sm truncate">{t.text}</p>
+                  </div>
+                ))}
+                {selectedText && (
+                  <div className="space-y-2 pt-2 border-t border-zinc-800">
+                    <input value={selectedText.text} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, text: e.target.value } : t)) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+                    <input type="number" min={14} max={90} value={selectedText.fontSize} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, fontSize: Number(e.target.value) } : t)) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
+                    <input type="color" value={selectedText.color} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, color: e.target.value } : t)) }))} className="w-full h-9 bg-zinc-800 rounded-lg" />
+                  </div>
+                )}
+              </div>
+            )}
+            {activeTab === "effects" && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {TRANSITIONS.map((tr) => (
+                    <button key={tr.id} onClick={() => setProject((p) => ({ ...p, transition: tr.id }))} className={`py-2 rounded-lg text-xs border ${project.transition === tr.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{tr.label}</button>
+                  ))}
+                </div>
+                <label className="text-[11px] text-zinc-400">Transition {project.transitionDuration.toFixed(1)}s</label>
+                <input type="range" min={0.5} max={2.5} step={0.1} value={project.transitionDuration} onChange={(e) => setProject((p) => ({ ...p, transitionDuration: Number(e.target.value) }))} className="w-full accent-violet-500" />
+                <div className="grid grid-cols-2 gap-2">
+                  {EFFECTS.map((fx) => (
+                    <button key={fx.id} onClick={() => setProject((p) => ({ ...p, effect: fx.id }))} className={`py-2 rounded-lg text-xs border ${project.effect === fx.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{fx.label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </aside>
+        <main className="flex-1 flex flex-col items-center justify-center bg-zinc-950 p-4 min-w-0">
+          <canvas ref={canvasRef} width={360} height={640} className="bg-black rounded-2xl border border-zinc-800 max-h-[52vh] w-auto" />
+          <div className="mt-4 flex items-center gap-3">
+            <button onClick={() => { setIsPlaying(false); setCurrentSlideIndex(0); indexRef.current = 0; setPlayheadTime(0); }} className="w-10 h-10 rounded-full bg-zinc-800">⏹</button>
+            <button onClick={() => project.media.length && setIsPlaying((v) => !v)} className="w-14 h-14 rounded-full bg-violet-600 text-2xl">{isPlaying ? "⏸" : "▶"}</button>
+            <button onClick={() => project.media.length && jumpToSlide((currentSlideIndex + 1) % project.media.length)} className="w-10 h-10 rounded-full bg-zinc-800">⏭</button>
+          </div>
+          <div className="flex items-center gap-3 w-full max-w-xs mt-3">
+            <span className="text-[11px] text-zinc-500">Slow</span>
+            <input type="range" min={0.5} max={2} step={0.1} value={project.playbackSpeed} onChange={(e) => setProject((p) => ({ ...p, playbackSpeed: Number(e.target.value) }))} className="flex-1 accent-violet-500" />
+            <span className="text-xs text-violet-400">{project.playbackSpeed.toFixed(1)}x</span>
+          </div>
+          {project.media.length > 0 && (
+            <div className="w-full max-w-xl mt-3 relative h-14 bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex">
+              {project.media.map((m, i) => (
+                <button key={m.id} onClick={() => jumpToSlide(i)} className={`relative flex-1 overflow-hidden ${currentSlideIndex === i ? "ring-2 ring-violet-500" : "opacity-70"}`}>
+                  <img src={m.url} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+              <div className="absolute top-0 bottom-0 w-0.5 bg-violet-400 pointer-events-none" style={{ left: `${playheadPercent}%` }} />
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
