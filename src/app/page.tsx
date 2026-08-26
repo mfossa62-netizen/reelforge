@@ -38,6 +38,7 @@ const EFFECTS: { id: EffectType; label: string }[] = [
   { id: "none", label: "None" }, { id: "bright", label: "Bright" }, { id: "vintage", label: "Vintage" }, { id: "cool", label: "Cool" },
   { id: "warm", label: "Warm" }, { id: "grayscale", label: "B&W" }, { id: "contrast", label: "Contrast" }, { id: "soft", label: "Soft" },
 ];
+const FRAME_COLORS = ["#000000", "#111827", "#1e1b4b", "#3f1d2e", "#14532d", "#7c2d12", "#ffffff", "#f5f5f4", "#e11d48", "#2563eb"];
 
 const DEFAULT_PROJECT: Project = {
   media: [], texts: [], backgroundColor: "#000000",
@@ -56,6 +57,7 @@ export default function Home() {
   const [playheadTime, setPlayheadTime] = useState(0);
   const [customLooks, setCustomLooks] = useState<ThemeTemplate[]>([]);
   const [lookName, setLookName] = useState("My look");
+  const [saveMsg, setSaveMsg] = useState("");
   const [editTarget, setEditTarget] = useState<"photo" | "text">("photo");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -94,7 +96,7 @@ export default function Home() {
 
   const applyTheme = (theme: ThemeTemplate) => {
     const texts = theme.texts.map((t) => ({ ...t, id: crypto.randomUUID(), fontFamily: (t as TextOverlay).fontFamily || "system-ui, sans-serif" }));
-    setProject((p) => ({ ...p, backgroundColor: theme.backgroundColor, texts, themeName: theme.name, transition: theme.transition, effect: theme.effect, transitionDuration: theme.transitionDuration, secondsPerSlide: theme.secondsPerSlide, playbackSpeed: theme.playbackSpeed }));
+    setProject((p) => ({ ...p, backgroundColor: theme.backgroundColor || "#000000", texts, themeName: theme.name, transition: theme.transition, effect: theme.effect, transitionDuration: theme.transitionDuration, secondsPerSlide: theme.secondsPerSlide, playbackSpeed: theme.playbackSpeed }));
     setSelectedTextId(texts[0]?.id || null);
     setActiveTab("media");
   };
@@ -127,6 +129,30 @@ export default function Home() {
     setProject((p) => ({ ...p, media: p.media.map((m, i) => (i === idx ? { ...m, ...updates } : m)) }));
   };
 
+  const saveLook = () => {
+    const name = lookName.trim() || "My look";
+    const look: ThemeTemplate = {
+      id: `mine-${Date.now()}`,
+      name,
+      emoji: "*",
+      description: "Custom",
+      backgroundColor: project.backgroundColor,
+      texts: project.texts.map((t) => ({ text: t.text, x: t.x, y: t.y, fontSize: t.fontSize, color: t.color, fontWeight: t.fontWeight })) as ThemeTemplate["texts"],
+      transition: project.transition,
+      effect: project.effect,
+      transitionDuration: project.transitionDuration,
+      secondsPerSlide: project.secondsPerSlide,
+      playbackSpeed: project.playbackSpeed,
+    };
+    const next = [look, ...customLooks.filter((x) => x.name !== name)].slice(0, 20);
+    setCustomLooks(next);
+    try { localStorage.setItem("reelforge-custom-looks", JSON.stringify(next)); } catch {}
+    setProject((p) => ({ ...p, themeName: name }));
+    setSaveMsg(`Saved ${name}`);
+    setActiveTab("themes");
+    setTimeout(() => setSaveMsg(""), 2500);
+  };
+
   const applyEffect = (ctx: CanvasRenderingContext2D, effect: EffectType) => {
     const map: Record<EffectType, string> = {
       none: "none", bright: "brightness(1.25) contrast(1.05)", vintage: "sepia(0.45) contrast(1.1) brightness(0.95)",
@@ -154,7 +180,7 @@ export default function Home() {
     const n = Math.max(proj.media.length, 1);
     const idx = ((slideIndex % n) + n) % n;
     const nextIdx = (idx + 1) % n;
-    ctx.fillStyle = proj.backgroundColor;
+    ctx.fillStyle = proj.backgroundColor || "#000000";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (proj.media.length === 0) {
       ctx.fillStyle = "#52525b"; ctx.font = "16px system-ui"; ctx.textAlign = "center";
@@ -267,7 +293,6 @@ export default function Home() {
   };
 
   const onCanvasUp = () => { dragRef.current = null; };
-
   const onCanvasWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     const item = project.media[currentSlideIndex];
@@ -275,7 +300,6 @@ export default function Home() {
     const next = Math.min(3, Math.max(0.4, (item.scale || 1) + (e.deltaY < 0 ? 0.08 : -0.08)));
     updateCurrentMedia({ scale: Number(next.toFixed(2)) });
   };
-
   const jumpToSlide = (i: number) => { setIsPlaying(false); setCurrentSlideIndex(i); indexRef.current = i; setPlayheadTime(i * slideDur); };
 
   const handleExportVideo = async () => {
@@ -320,7 +344,7 @@ export default function Home() {
       <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900 shrink-0">
         <div>
           <h1 className="font-semibold text-lg">ReelForge</h1>
-          <p className="text-[11px] text-zinc-400">Scale photos and style text</p>
+          <p className="text-[11px] text-zinc-400">Save looks and change frame color</p>
         </div>
         <button onClick={handleExportVideo} disabled={exportingVideo || project.media.length === 0} className="px-4 py-2 rounded-lg bg-violet-600 text-sm">{exportingVideo ? exportProgress || "Exporting…" : "Export Video"}</button>
       </header>
@@ -333,30 +357,53 @@ export default function Home() {
           </div>
           <div className="flex-1 overflow-y-auto p-3">
             {activeTab === "themes" && (
-              <div className="grid grid-cols-2 gap-2">
-                {THEMES.map((theme) => (
-                  <button key={theme.id} onClick={() => applyTheme(theme)} className={`text-left p-3 rounded-xl border ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
-                    <div className="text-2xl">{theme.emoji}</div>
-                    <div className="text-sm font-medium">{theme.name}</div>
-                  </button>
-                ))}
+              <div className="space-y-3">
+                {saveMsg && <p className="text-[11px] text-emerald-400">{saveMsg}</p>}
+                <p className="text-[11px] text-zinc-400">My templates</p>
+                {customLooks.length === 0 && <p className="text-[11px] text-zinc-500">None yet. Set FX, then Save look.</p>}
+                <div className="grid grid-cols-2 gap-2">
+                  {customLooks.map((theme) => (
+                    <div key={theme.id} className={`rounded-xl border p-2 ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
+                      <button onClick={() => applyTheme(theme)} className="text-left w-full">
+                        <div className="text-sm font-medium truncate">{theme.name}</div>
+                        <div className="text-[9px] text-zinc-400">{theme.transition} · {theme.effect}</div>
+                      </button>
+                      <button type="button" onClick={() => { const next = customLooks.filter((x) => x.id !== theme.id); setCustomLooks(next); try { localStorage.setItem("reelforge-custom-looks", JSON.stringify(next)); } catch {} }} className="text-[10px] text-red-400 mt-1">delete</button>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-zinc-400">Built-in looks</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {THEMES.map((theme) => (
+                    <button key={theme.id} onClick={() => applyTheme(theme)} className={`text-left p-3 rounded-xl border ${project.themeName === theme.name ? "border-violet-500 bg-violet-500/10" : "border-zinc-700"}`}>
+                      <div className="text-2xl">{theme.emoji}</div>
+                      <div className="text-sm font-medium">{theme.name}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
             {activeTab === "media" && (
               <div className="space-y-3">
                 <button onClick={() => fileInputRef.current?.click()} className="w-full py-3 rounded-xl border border-dashed border-zinc-600 text-sm">+ Add photos</button>
-                <p className="text-[11px] text-zinc-400">Size in frame: use - / + or the slider. Scroll on the preview also scales.</p>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFileUpload} />
                 {currentMedia && (
                   <div className="rounded-xl border border-zinc-700 p-3 space-y-2">
                     <p className="text-[11px] text-zinc-400">Photo {currentSlideIndex + 1} frame</p>
-                    <label className="text-[11px] text-zinc-400">Size in frame {(currentMedia.scale || 1).toFixed(2)}x</label>
+                    <label className="text-[11px] text-zinc-400">Size {(currentMedia.scale || 1).toFixed(2)}x</label>
                     <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => updateCurrentMedia({ scale: Math.max(0.4, Number(((currentMedia.scale || 1) - 0.1).toFixed(2))) })} className="px-2 py-1 rounded bg-zinc-800 text-sm">-</button>
+                      <button type="button" onClick={() => updateCurrentMedia({ scale: Math.max(0.4, Number(((currentMedia.scale || 1) - 0.1).toFixed(2))) })} className="px-2 py-1 rounded bg-zinc-800">-</button>
                       <input type="range" min={0.4} max={3} step={0.05} value={currentMedia.scale || 1} onChange={(e) => updateCurrentMedia({ scale: Number(e.target.value) })} className="flex-1 accent-violet-500" />
-                      <button type="button" onClick={() => updateCurrentMedia({ scale: Math.min(3, Number(((currentMedia.scale || 1) + 0.1).toFixed(2))) })} className="px-2 py-1 rounded bg-zinc-800 text-sm">+</button>
+                      <button type="button" onClick={() => updateCurrentMedia({ scale: Math.min(3, Number(((currentMedia.scale || 1) + 0.1).toFixed(2))) })} className="px-2 py-1 rounded bg-zinc-800">+</button>
                     </div>
                     <button onClick={() => updateCurrentMedia({ scale: 1, panX: 0, panY: 0 })} className="w-full py-1.5 rounded-lg bg-zinc-800 text-xs">Reset frame</button>
+                    <label className="text-[11px] text-zinc-400">Frame color</label>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {FRAME_COLORS.map((col) => (
+                        <button key={col} type="button" onClick={() => setProject((p) => ({ ...p, backgroundColor: col }))} className={`w-5 h-5 rounded-full border ${project.backgroundColor === col ? "border-violet-400" : "border-zinc-600"}`} style={{ backgroundColor: col }} />
+                      ))}
+                      <input type="color" value={project.backgroundColor} onChange={(e) => setProject((p) => ({ ...p, backgroundColor: e.target.value }))} className="w-6 h-6 bg-transparent border-0" />
+                    </div>
                   </div>
                 )}
                 {project.media.map((m, i) => (
@@ -366,7 +413,6 @@ export default function Home() {
                       <button type="button" disabled={i === 0} onClick={() => moveMedia(i, i - 1)} className="text-[10px] bg-black/70 px-1.5 rounded disabled:opacity-30">Up</button>
                       <button type="button" disabled={i === project.media.length - 1} onClick={() => moveMedia(i, i + 1)} className="text-[10px] bg-black/70 px-1.5 rounded disabled:opacity-30">Dn</button>
                     </div>
-                    <div className="absolute bottom-1 left-1 text-[10px] bg-black/70 px-1.5 rounded">{i + 1}</div>
                     <button type="button" onClick={() => setProject((p) => ({ ...p, media: p.media.filter((x) => x.id !== m.id) }))} className="absolute top-1 right-1 text-[10px] bg-red-600 px-1.5 rounded">x</button>
                   </div>
                 ))}
@@ -374,7 +420,6 @@ export default function Home() {
             )}
             {activeTab === "text" && (
               <div className="space-y-3">
-                <p className="text-[11px] text-zinc-400">Select a line to change font and size.</p>
                 <button onClick={() => { const t: TextOverlay = { id: crypto.randomUUID(), text: "New text", x: 50, y: 50, fontSize: 32, color: "#ffffff", fontWeight: "bold", fontFamily: "system-ui, sans-serif" }; setProject((p) => ({ ...p, texts: [...p.texts, t] })); setSelectedTextId(t.id); setEditTarget("text"); }} className="w-full py-2 rounded-lg bg-violet-600/20 text-violet-400 text-sm">+ Add text</button>
                 {project.texts.map((t) => (
                   <div key={t.id} onClick={() => { setSelectedTextId(t.id); setEditTarget("text"); }} className={`p-3 rounded-xl border cursor-pointer ${selectedTextId === t.id ? "border-violet-500" : "border-zinc-700"}`}><p className="text-sm truncate">{t.text}</p></div>
@@ -382,20 +427,11 @@ export default function Home() {
                 {selectedText && (
                   <div className="space-y-2">
                     <input value={selectedText.text} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, text: e.target.value } : t)) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
-                    <label className="text-[11px] text-zinc-400">Font</label>
                     <select value={selectedText.fontFamily || "system-ui, sans-serif"} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, fontFamily: e.target.value } : t)) }))} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
                       {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
                     </select>
                     <label className="text-[11px] text-zinc-400">Text size {selectedText.fontSize}px</label>
-                    <div className="flex items-center gap-2">
-                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontSize: Math.max(12, t.fontSize - 2) } : t) }))} className="px-2 py-1 rounded bg-zinc-800">-</button>
-                      <input type="range" min={12} max={72} value={selectedText.fontSize} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, fontSize: Number(e.target.value) } : t)) }))} className="flex-1 accent-violet-500" />
-                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontSize: Math.min(72, t.fontSize + 2) } : t) }))} className="px-2 py-1 rounded bg-zinc-800">+</button>
-                    </div>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontWeight: "normal" } : t) }))} className={`flex-1 py-1 rounded text-xs border ${selectedText.fontWeight === "normal" ? "border-violet-500" : "border-zinc-700"}`}>Regular</button>
-                      <button type="button" onClick={() => setProject((p) => ({ ...p, texts: p.texts.map((t) => t.id === selectedText.id ? { ...t, fontWeight: "bold" } : t) }))} className={`flex-1 py-1 rounded text-xs border ${selectedText.fontWeight === "bold" ? "border-violet-500" : "border-zinc-700"}`}>Bold</button>
-                    </div>
+                    <input type="range" min={12} max={72} value={selectedText.fontSize} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, fontSize: Number(e.target.value) } : t)) }))} className="w-full accent-violet-500" />
                     <label className="text-[11px] text-zinc-400">Left / right {Math.round(selectedText.x)}%</label>
                     <input type="range" min={8} max={92} value={selectedText.x} onChange={(e) => setProject((p) => ({ ...p, texts: p.texts.map((t) => (t.id === selectedText.id ? { ...t, x: Number(e.target.value) } : t)) }))} className="w-full accent-violet-500" />
                     <label className="text-[11px] text-zinc-400">Up / down {Math.round(selectedText.y)}%</label>
@@ -410,12 +446,17 @@ export default function Home() {
                 <label className="text-[11px] text-zinc-400">Blend {project.transitionDuration.toFixed(1)}s</label>
                 <input type="range" min={0.4} max={2.5} step={0.1} value={project.transitionDuration} onChange={(e) => setProject((p) => ({ ...p, transitionDuration: Number(e.target.value) }))} className="w-full accent-violet-500" />
                 <div className="grid grid-cols-2 gap-2">{EFFECTS.map((fx) => (<button key={fx.id} onClick={() => setProject((p) => ({ ...p, effect: fx.id, themeName: "Custom" }))} className={`py-2 rounded-lg text-xs border ${project.effect === fx.id ? "border-violet-500 text-violet-300" : "border-zinc-700"}`}>{fx.label}</button>))}</div>
-                <input value={lookName} onChange={(e) => setLookName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" />
-                <button onClick={() => {
-                  const look: ThemeTemplate = { id: `mine-${Date.now()}`, name: lookName.trim() || "My look", emoji: "*", description: "Custom", backgroundColor: project.backgroundColor, texts: project.texts.map(({ id: _id, ...rest }) => rest), transition: project.transition, effect: project.effect, transitionDuration: project.transitionDuration, secondsPerSlide: project.secondsPerSlide, playbackSpeed: project.playbackSpeed };
-                  const next = [look, ...customLooks].slice(0, 20);
-                  setCustomLooks(next); localStorage.setItem("reelforge-custom-looks", JSON.stringify(next)); setProject((p) => ({ ...p, themeName: look.name }));
-                }} className="w-full py-2 rounded-lg bg-violet-600 text-sm">Save look</button>
+                <p className="text-[11px] text-zinc-400">Frame background</p>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {FRAME_COLORS.map((col) => (
+                    <button key={col} type="button" onClick={() => setProject((p) => ({ ...p, backgroundColor: col }))} className={`w-6 h-6 rounded-full border ${project.backgroundColor === col ? "border-violet-400" : "border-zinc-600"}`} style={{ backgroundColor: col }} />
+                  ))}
+                  <input type="color" value={project.backgroundColor} onChange={(e) => setProject((p) => ({ ...p, backgroundColor: e.target.value }))} className="w-8 h-8 bg-transparent border-0" />
+                </div>
+                <p className="text-[11px] text-zinc-400">Save as my template</p>
+                <input value={lookName} onChange={(e) => setLookName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm" placeholder="Template name" />
+                <button type="button" onClick={saveLook} className="w-full py-2 rounded-lg bg-violet-600 text-sm">Save look</button>
+                {saveMsg && <p className="text-[11px] text-emerald-400">{saveMsg}</p>}
               </div>
             )}
           </div>
